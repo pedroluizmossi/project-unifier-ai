@@ -16,41 +16,39 @@ export const performProjectAnalysis = async (
   
   const modelName = userConfig?.model || 'gemini-3-pro-preview';
   const useThinking = userConfig?.useThinking !== false;
-  const budget = modelName === 'gemini-3-pro-preview' ? 32768 : 24576;
+  // Ajuste de budget: Modelos Pro suportam mais tokens de pensamento
+  const budget = modelName.includes('pro') ? 32768 : 24576;
 
+  // Construção do System Prompt Robusto
   const systemPrompt = `
-    Você é um Arquiteto de Software Sênior e Revisor de Código Elite operando em modo Spec-Driven Development.
+    Você é um Arquiteto de Software Sênior e Revisor de Código Elite (Project Unifier AI).
     
-    ${projectSpec ? `BLUEPRINT TÉCNICO DO PROJETO (REGRAS DE OURO):
-    ---
-    ${projectSpec}
-    ---` : ''}
-
-    CONTEXTO DO CÓDIGO FONTE DO PROJETO:
+    [[CONTEXTO DO PROJETO]]
+    O usuário carregou os seguintes arquivos do projeto para análise:
     ---
     ${projectContext}
     ---
-    
-    ${diffContext ? `MUDANÇAS PROPOSTAS (DIFF):\n---\n${diffContext}\n---` : ''}
-    
-    INSTRUÇÕES:
-    1. Respeite estritamente o Blueprint Técnico acima.
-    2. Se a tarefa violar a arquitetura definida, alerte o usuário antes de prosseguir.
-    3. Analise também quaisquer arquivos de apoio (anexos) fornecidos nesta mensagem.
-    4. Seja técnico, preciso e mantenha a consistência com o estilo de código detectado.
-    5. Mantenha o contexto das mensagens anteriores da conversa.
+
+    ${projectSpec ? `[[SPECIFICATION / BLUEPRINT]]\nRegras de arquitetura definidas:\n${projectSpec}\n` : ''}
+    ${diffContext ? `[[GIT DIFF / MUDANÇAS]]\nO usuário está analisando estas mudanças:\n${diffContext}\n` : ''}
+
+    DIRETRIZES:
+    1. Responda com precisão técnica, citando arquivos e trechos de código quando relevante.
+    2. Se houver um Blueprint, siga-o estritamente.
+    3. Use Markdown para formatar a resposta (blocos de código, negrito, listas).
+    4. Seja direto e evite preâmbulos desnecessários.
   `;
 
   const config: any = {
     temperature: 0.7,
-    systemInstruction: systemPrompt,
+    systemInstruction: systemPrompt, // Correção: systemInstruction deve estar dentro de config
   };
 
   if (useThinking) {
     config.thinkingConfig = { thinkingBudget: budget };
   }
 
-  // Map history to Gemini Content format
+  // Mapeamento do histórico para o formato da API
   const historyContents = history.map(msg => {
     const parts: any[] = [{ text: msg.text }];
     if (msg.role === 'user' && msg.attachments) {
@@ -69,8 +67,8 @@ export const performProjectAnalysis = async (
     };
   });
 
-  // Construct current user message parts
-  const currentParts: any[] = [{ text: `TAREFA DO USUÁRIO: ${userPrompt}` }];
+  // Construção da mensagem atual
+  const currentParts: any[] = [{ text: userPrompt }];
   attachments.forEach(att => {
     currentParts.push({
       inlineData: {
@@ -108,11 +106,11 @@ export const performProjectAnalysis = async (
         contents,
         config
       });
-      return response.text || "O modelo não retornou conteúdo.";
+      return response.text || "O modelo processou a solicitação mas não retornou texto.";
     }
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    throw new Error(error.message || "Erro na comunicação com o Gemini.");
+    throw new Error(`Erro na IA: ${error.message}`);
   }
 };
 
@@ -121,34 +119,41 @@ export const generateProjectBlueprint = async (
   userConfig?: GeminiConfig
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = 'gemini-3-pro-preview';
   
+  // Para blueprints, usamos sempre o modelo Pro com thinking alto
   const prompt = `
-    Analise o código fonte fornecido e gere um BLUEPRINT TÉCNICO (Spec) estruturado.
-    Este documento servirá de guia para futuras manutenções por IA.
+    Analise profundamente o código fonte fornecido e gere um "Technical Blueprint" (Especificação Técnica).
     
-    FORMATO DESEJADO:
-    1. **Domain Logic**: Quais as entidades principais e regras de negócio?
-    2. **Data Flow**: Como os dados transitam entre componentes?
-    3. **Tech Stack & Invariants**: Tecnologias chaves e padrões que NUNCA devem ser quebrados (ex: SOLID, Clean Arch).
-    4. **Critical Paths**: Áreas sensíveis (Segurança, Performance).
-
-    CÓDIGO:
-    ${projectContext}
+    Estrutura da Resposta (Markdown):
+    # Blueprint do Sistema
+    ## 1. Visão Geral & Domínio
+    Resumo do propósito do software e principais entidades.
+    
+    ## 2. Arquitetura de Dados
+    Como os dados fluem? Principais stores, bancos ou estados globais.
+    
+    ## 3. Stack & Padrões
+    Linguagens, frameworks e patterns identificados (ex: MVVM, Repository, Hooks).
+    
+    ## 4. Pontos Críticos
+    Áreas que requerem atenção especial (segurança, performance, dívida técnica).
+    
+    CONTEXTO DO CÓDIGO:
+    ${projectContext.slice(0, 800000)} // Limite de segurança, embora Gemini 1.5 suporte muito mais
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: 'gemini-3-pro-preview',
       contents: [{ parts: [{ text: prompt }] }],
       config: { 
-        temperature: 0.4,
-        thinkingConfig: { thinkingBudget: 32768 } 
+        temperature: 0.2,
+        thinkingConfig: { thinkingBudget: 16000 } // Budget menor para esta tarefa específica para ser mais rápido
       }
     });
-    return response.text || "Falha ao gerar blueprint.";
+    return response.text || "Não foi possível gerar o blueprint.";
   } catch (error: any) {
-    throw new Error("Erro ao gerar Blueprint: " + error.message);
+    throw new Error("Falha ao gerar Blueprint: " + error.message);
   }
 };
 
@@ -156,22 +161,18 @@ export const generateAdaptiveTemplates = async (
   projectContext: string
 ): Promise<AnalysisTemplate[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // Truncate context heavily for this specific task to save tokens/time, header files usually enough
-  const contextSnippet = projectContext.slice(0, 50000); 
+  const contextSnippet = projectContext.slice(0, 30000); 
 
   const prompt = `
-    Analise este snippet de código de um projeto.
-    Gere 3 templates de prompts de análise ALTAMENTE ESPECÍFICOS para este projeto.
-    Por exemplo, se for React, sugira prompts sobre Hooks ou Re-renders. Se for Backend, sobre API ou DB.
-    
-    Retorne APENAS um JSON array.
+    Com base neste código, crie 3 prompts de análise customizados úteis para um desenvolvedor.
+    Retorne APENAS um JSON Array puro.
+    Exemplo Schema: [{ "id": "...", "name": "...", "description": "...", "prompt": "...", "icon": "emoji" }]
   `;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Flash is fast enough for this
-      contents: [{ parts: [{ text: `CONTEXTO:\n${contextSnippet}\n\n${prompt}` }] }],
+      model: 'gemini-3-flash-preview',
+      contents: [{ parts: [{ text: `CÓDIGO:\n${contextSnippet}\n\n${prompt}` }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -191,12 +192,9 @@ export const generateAdaptiveTemplates = async (
       }
     });
 
-    const text = response.text;
-    if (!text) return [];
-    
-    return JSON.parse(text) as AnalysisTemplate[];
+    return JSON.parse(response.text || "[]") as AnalysisTemplate[];
   } catch (error) {
-    console.error("Erro ao gerar templates adaptativos", error);
+    console.warn("Erro templates adaptativos:", error);
     return [];
   }
 };

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ANALYSIS_TEMPLATES } from '../constants';
 import { AnalysisTemplate } from '../types';
@@ -144,7 +143,13 @@ const TemplateSelectorModal: React.FC<TemplateSelectorModalProps> = ({ isOpen, o
   ));
 };
 
-const TemplateCard = ({ template, onClick, highlight }: { template: AnalysisTemplate, onClick: () => void, highlight?: boolean }) => (
+interface TemplateCardProps {
+  template: AnalysisTemplate;
+  onClick: () => void;
+  highlight?: boolean;
+}
+
+const TemplateCard: React.FC<TemplateCardProps> = ({ template, onClick, highlight }) => (
   <button
     onClick={onClick}
     className={`group relative p-5 rounded-2xl text-left transition-all duration-300 hover:shadow-lg flex items-start gap-4 border ${

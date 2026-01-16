@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ProjectSession, FileInfo, OutputFormat, ChatSession, ChatMessage } from '../types';
 import { getSessions, saveSession, deleteSession } from '../lib/storage';
 import { collectFileHandles, processFile, processFileList, generateOutput } from '../lib/utils';

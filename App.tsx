@@ -12,7 +12,11 @@ import { useSpring, animated } from 'react-spring';
 const App: React.FC = () => {
   const pm = useProjectManager();
   const [appMode, setAppMode] = useState<'project' | 'mr_analysis'>('project');
-  const [isContextOpen, setIsContextOpen] = useState(true);
+  
+  // Estado Visual
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isContextOpen, setIsContextOpen] = useState(false); // Inicia fechado conforme solicitado
+  
   const [diffContent, setDiffContent] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +45,19 @@ const App: React.FC = () => {
     (langFilter === 'all' || f.language === langFilter)
   ), [pm.files, searchTerm, langFilter]);
 
-  const panelSpring = useSpring({ width: isContextOpen ? 500 : 0, opacity: isContextOpen ? 1 : 0 });
+  // Animações de Layout
+  const rightPanelSpring = useSpring({ 
+    width: isContextOpen ? 450 : 0, 
+    opacity: isContextOpen ? 1 : 0,
+    config: { tension: 210, friction: 20 }
+  });
+
+  const sidebarSpring = useSpring({
+    width: isSidebarOpen ? 280 : 0,
+    opacity: isSidebarOpen ? 1 : 0,
+    transform: isSidebarOpen ? 'translateX(0%)' : 'translateX(-100%)',
+    config: { tension: 210, friction: 20 }
+  });
 
   const handleDownload = () => {
     const blob = new Blob([outputContent], { type: 'text/plain' });
@@ -57,7 +73,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#0f1117] text-slate-200 overflow-hidden font-sans">
       <input 
         type="file" 
         ref={pm.fileInputRef} 
@@ -66,16 +82,28 @@ const App: React.FC = () => {
         {...({ webkitdirectory: "", directory: "" } as any)} 
       />
       
-      <Sidebar 
-        appMode={appMode} setAppMode={setAppMode} isProcessing={pm.isProcessing}
-        onSelectDirectory={pm.handleSelectDirectory} outputFormat={pm.outputFormat}
-        setOutputFormat={pm.setOutputFormat} files={pm.files} openFileExplorer={() => setIsModalOpen(true)}
-        stats={{...stats, text: stats.text}} directoryName={pm.directoryName} diffContent={diffContent} setDiffContent={setDiffContent}
-        sessions={pm.sessions} onSelectSession={pm.loadSession} activeSessionId={pm.activeSessionId}
-        onDeleteSession={(id, e) => { e.stopPropagation(); pm.handleDelete(id); }} onNewProject={pm.handleNewProject}
-      />
+      {/* Sidebar Esquerda (Collapsible) */}
+      <animated.div style={sidebarSpring} className="flex-shrink-0 h-full overflow-hidden border-r border-slate-800/50 bg-[#13141c]">
+        <div className="w-[280px] h-full flex flex-col">
+          <Sidebar 
+            appMode={appMode} setAppMode={setAppMode} isProcessing={pm.isProcessing}
+            onSelectDirectory={pm.handleSelectDirectory} outputFormat={pm.outputFormat}
+            setOutputFormat={pm.setOutputFormat} files={pm.files} openFileExplorer={() => setIsModalOpen(true)}
+            stats={{...stats, text: stats.text}} directoryName={pm.directoryName} diffContent={diffContent} setDiffContent={setDiffContent}
+            sessions={pm.sessions} onSelectSession={pm.loadSession} activeSessionId={pm.activeSessionId}
+            onDeleteSession={(id, e) => { e.stopPropagation(); pm.handleDelete(id); }} 
+            closeSidebar={() => setIsSidebarOpen(false)}
+            // Chat Props
+            savedChats={pm.savedChats}
+            activeChatId={pm.activeChatId}
+            onNewChat={pm.handleNewChat}
+            onSelectChat={pm.handleSelectChat}
+          />
+        </div>
+      </animated.div>
 
-      <div className="flex-1 bg-slate-900 flex flex-col relative">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col relative min-w-0 bg-[#0f1117]">
         <AIAnalysisPanel 
           context={outputContent} projectSpec={pm.projectSpec} 
           diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
@@ -83,11 +111,13 @@ const App: React.FC = () => {
           isContextOpen={isContextOpen} toggleContext={() => setIsContextOpen(!isContextOpen)}
           savedChats={pm.savedChats} activeChatId={pm.activeChatId}
           onNewChat={pm.handleNewChat} onSelectChat={pm.handleSelectChat}
+          isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
       </div>
 
-      <animated.div style={panelSpring} className="h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden">
-        <div className="w-[500px] h-full flex flex-col">
+      {/* Right Panel (Dashboard) */}
+      <animated.div style={rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20">
+        <div className="w-[450px] h-full flex flex-col">
           <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onDownload={handleDownload} />
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
             {pm.files.length > 0 ? (
@@ -97,7 +127,7 @@ const App: React.FC = () => {
                 projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
                 outputContent={outputContent} outputFormat={pm.outputFormat}
               />
-            ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase">Vazio</div>}
+            ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>}
           </div>
         </div>
       </animated.div>
