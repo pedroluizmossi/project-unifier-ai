@@ -21,7 +21,6 @@ interface SidebarProps {
   activeSessionId: string | null;
   onDeleteSession: (id: string, e: React.MouseEvent) => void;
   closeSidebar: () => void;
-  // Chat Props
   savedChats: ChatSession[];
   activeChatId: string;
   onNewChat: () => void;
@@ -34,14 +33,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   sessions, onSelectSession, activeSessionId, onDeleteSession, closeSidebar,
   savedChats, activeChatId, onNewChat, onSelectChat
 }) => {
-
-  const sessionTransitions = useTransition(sessions, {
-    from: { opacity: 0, transform: 'translateX(-10px)', height: 0 },
-    enter: { opacity: 1, transform: 'translateX(0px)', height: 50 },
-    leave: { opacity: 0, transform: 'translateX(-10px)', height: 0 },
-    keys: item => item.id,
-    config: config.stiff
-  });
 
   const chatTransitions = useTransition(savedChats, {
     from: { opacity: 0, transform: 'translateX(-10px)', height: 0 },
@@ -75,118 +66,104 @@ const Sidebar: React.FC<SidebarProps> = ({
           <>
             {/* Action Area */}
             <div className="space-y-3">
-              {/* Botão de Nova Conversa (Só aparece se já tiver projeto) */}
-              {files.length > 0 && (
+              {files.length === 0 ? (
                 <button 
-                  onClick={onNewChat}
-                  className="w-full py-2.5 bg-white text-black hover:bg-slate-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg"
+                  onClick={onSelectDirectory}
+                  disabled={isProcessing}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white rounded-xl font-bold text-xs transition-all shadow-xl shadow-indigo-600/20 flex flex-col items-center gap-2"
                 >
-                  <span>💬</span> Nova Conversa
+                  {isProcessing ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span className="text-xl">📁</span>
+                      Abrir Projeto Local
+                    </>
+                  )}
                 </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={onNewChat}
+                    className="w-full py-3 bg-white text-black hover:bg-slate-200 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <span>💬</span> Nova Conversa
+                  </button>
+                  
+                  <button 
+                    onClick={openFileExplorer}
+                    className="w-full py-2.5 bg-[#1e1e24] hover:bg-[#2d2e35] text-slate-300 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/5"
+                  >
+                    <span>🔍</span> Gerenciar Workspace ({stats.text})
+                  </button>
+                </>
               )}
-
-              {/* Botão de Abrir Pasta (Sempre aparece, mas com estilo diferente se for secundário) */}
-              <button 
-                onClick={onSelectDirectory} 
-                disabled={isProcessing} 
-                className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                  files.length === 0 
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 py-4' 
-                  : 'bg-[#1e1e24] hover:bg-[#2d2e35] text-slate-300 border border-white/5'
-                }`}
-              >
-                {isProcessing ? (
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <>📂 {files.length === 0 ? 'Carregar Pasta' : 'Trocar Pasta'}</>
-                )}
-              </button>
             </div>
 
-            {/* Current Chats List */}
-            {files.length > 0 && (
-              <div className="flex-1 min-h-0">
-                <div className="flex items-center justify-between mb-2">
-                   <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Conversas do Projeto</h4>
-                </div>
-                
+            {/* Chats Recentes */}
+            {savedChats.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">Conversas</h3>
                 <div className="space-y-1">
-                  {savedChats.length === 0 ? (
-                    <p className="text-xs text-slate-600 italic pl-1">Inicie um chat...</p>
-                  ) : (
-                    chatTransitions((style, chat) => (
-                      <animated.div style={style}>
-                         <button
-                          onClick={() => onSelectChat(chat.id)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all truncate flex items-center gap-2 ${
-                            activeChatId === chat.id 
-                              ? 'bg-[#2d2e35] text-white border-l-2 border-indigo-500' 
-                              : 'text-slate-400 hover:bg-[#1e1e24] hover:text-slate-200'
-                          }`}
-                        >
-                           <span className="opacity-50">💭</span>
-                           <span className="truncate">{chat.title || 'Nova Conversa'}</span>
-                        </button>
-                      </animated.div>
-                    ))
-                  )}
+                  {chatTransitions((style, chat) => (
+                    <animated.button
+                      key={chat.id}
+                      style={style}
+                      onClick={() => onSelectChat(chat.id)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition-all flex items-center gap-3 border ${
+                        activeChatId === chat.id 
+                        ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400' 
+                        : 'text-slate-400 hover:bg-white/5 border-transparent'
+                      }`}
+                    >
+                      <span className="opacity-50">#</span>
+                      <span className="truncate flex-1 font-medium">{chat.title}</span>
+                    </animated.button>
+                  ))}
                 </div>
               </div>
             )}
-
-            <div className="w-full h-px bg-white/5 my-2"></div>
-
-            {/* Project History List */}
-            <div className="flex-1 min-h-0">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Projetos Recentes</h4>
-              <div className="space-y-1">
-                {sessions.length === 0 ? (
-                    <p className="text-xs text-slate-600 italic">Histórico vazio.</p>
-                  ) : (
-                    sessionTransitions((style, s) => (
-                      <animated.div style={style}>
-                         <div 
-                          onClick={() => onSelectSession(s)}
-                          className={`group relative p-3 rounded-xl border transition-all cursor-pointer ${activeSessionId === s.id ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-transparent border-transparent hover:bg-[#1e1e24] hover:border-white/5'}`}
-                        >
-                          <div className="flex justify-between items-start">
-                             <p className={`text-xs font-medium truncate pr-4 ${activeSessionId === s.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{s.name}</p>
-                          </div>
-                          <p className="text-[9px] text-slate-600 mt-1 flex justify-between">
-                            <span>{new Date(s.lastUpdated).toLocaleDateString()}</span>
-                            <span>{s.files.length} arquivos</span>
-                          </p>
-                          <button 
-                            onClick={(e) => onDeleteSession(s.id, e)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded-md transition-all text-slate-500"
-                            title="Apagar Projeto"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </div>
-                      </animated.div>
-                    ))
-                  )}
+            
+            {/* Projetos Salvos */}
+            {sessions.length > 0 && (
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">Projetos Salvos</h3>
+                <div className="space-y-1">
+                  {sessions.slice(0, 5).map(session => (
+                    <button
+                      key={session.id}
+                      onClick={() => onSelectSession(session)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition-all flex items-center justify-between group ${
+                        activeSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      <span className="truncate">{session.name}</span>
+                      <span onClick={(e) => onDeleteSession(session.id, e)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400">✕</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : (
-          <div className="flex-1 flex flex-col space-y-3">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Git Diff Input</label>
+          <div className="space-y-4">
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">Git Diff Analysis</h3>
             <textarea 
-              value={diffContent} 
-              onChange={(e) => setDiffContent(e.target.value)} 
-              placeholder="Cole o resultado de 'git diff' aqui..." 
-              className="flex-1 w-full bg-[#1e1e24] border border-white/5 rounded-xl p-4 text-[10px] font-mono text-indigo-300 focus:ring-1 focus:ring-indigo-500 outline-none resize-none placeholder:text-slate-700" 
+              value={diffContent}
+              onChange={(e) => setDiffContent(e.target.value)}
+              placeholder="Cole seu git diff aqui para análise focada..."
+              className="w-full h-64 bg-[#1e1e24] border border-white/5 rounded-2xl p-4 text-[10px] font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none scrollbar-hide resize-none"
             />
           </div>
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="pt-4 border-t border-white/5 text-[9px] text-slate-600 flex justify-between uppercase font-bold tracking-widest">
-        <span>v3.2</span>
-        <span>Gemini Pro</span>
+      {/* Footer Branding */}
+      <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
+         <div className="flex items-center gap-2 px-2">
+           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Operational</span>
+         </div>
       </div>
     </div>
   );

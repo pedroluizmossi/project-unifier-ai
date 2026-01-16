@@ -12,15 +12,17 @@ interface DashboardProps {
   availableLanguages: string[];
   isGeneratingSummary: boolean;
   projectSummary: string;
-  projectSpec?: string; // Nova prop
+  projectSpec?: string;
   onGenerateSummary: () => void;
   outputContent: string;
   outputFormat: OutputFormat;
+  openFileExplorer?: () => void; // Prop opcional para abrir o modal
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   files, stats, availableLanguages, isGeneratingSummary, 
-  projectSummary, projectSpec, onGenerateSummary, outputContent, outputFormat 
+  projectSummary, projectSpec, onGenerateSummary, outputContent, outputFormat,
+  openFileExplorer
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'spec'>('summary');
   
@@ -52,9 +54,17 @@ const Dashboard: React.FC<DashboardProps> = ({
              <span className="w-1.5 h-4 bg-indigo-600 rounded-full"></span>
              Métricas
            </h3>
-           {(!projectSummary && !projectSpec) && !isGeneratingSummary && (
-             <button onClick={onGenerateSummary} className="text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full transition-all bg-indigo-500/5 hover:bg-indigo-500/20 active:scale-95">⚡ Iniciar Análise SDD</button>
-           )}
+           <div className="flex gap-2">
+              <button 
+                onClick={openFileExplorer}
+                className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white border border-white/10 px-3 py-1 rounded-full transition-all bg-white/5"
+              >
+                ⚙️ Ajustar Workspace
+              </button>
+              {(!projectSummary && !projectSpec) && !isGeneratingSummary && (
+                <button onClick={onGenerateSummary} className="text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full transition-all bg-indigo-500/5 hover:bg-indigo-500/20 active:scale-95">⚡ Iniciar Raio-X</button>
+              )}
+           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

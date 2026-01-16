@@ -15,7 +15,7 @@ const App: React.FC = () => {
   
   // Estado Visual
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isContextOpen, setIsContextOpen] = useState(false); // Inicia fechado conforme solicitado
+  const [isContextOpen, setIsContextOpen] = useState(false);
   
   const [diffContent, setDiffContent] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -82,7 +82,7 @@ const App: React.FC = () => {
         {...({ webkitdirectory: "", directory: "" } as any)} 
       />
       
-      {/* Sidebar Esquerda (Collapsible) */}
+      {/* Sidebar Esquerda */}
       <animated.div style={sidebarSpring} className="flex-shrink-0 h-full overflow-hidden border-r border-slate-800/50 bg-[#13141c]">
         <div className="w-[280px] h-full flex flex-col">
           <Sidebar 
@@ -93,7 +93,6 @@ const App: React.FC = () => {
             sessions={pm.sessions} onSelectSession={pm.loadSession} activeSessionId={pm.activeSessionId}
             onDeleteSession={(id, e) => { e.stopPropagation(); pm.handleDelete(id); }} 
             closeSidebar={() => setIsSidebarOpen(false)}
-            // Chat Props
             savedChats={pm.savedChats}
             activeChatId={pm.activeChatId}
             onNewChat={pm.handleNewChat}
@@ -126,6 +125,7 @@ const App: React.FC = () => {
                 isGeneratingSummary={pm.isGeneratingSummary} projectSummary={pm.projectSummary}
                 projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
                 outputContent={outputContent} outputFormat={pm.outputFormat}
+                openFileExplorer={() => setIsModalOpen(true)}
               />
             ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>}
           </div>
