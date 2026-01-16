@@ -43,6 +43,7 @@ export const performProjectAnalysis = async (
 
   const config: any = {
     temperature: 0.7,
+    systemInstruction: systemPrompt,
   };
 
   if (useThinking) {
@@ -89,8 +90,7 @@ export const performProjectAnalysis = async (
       const responseStream = await ai.models.generateContentStream({
         model: modelName,
         contents,
-        config,
-        systemInstruction: { parts: [{ text: systemPrompt }] }
+        config
       });
 
       let fullText = '';
@@ -106,8 +106,7 @@ export const performProjectAnalysis = async (
       const response = await ai.models.generateContent({
         model: modelName,
         contents,
-        config,
-        systemInstruction: { parts: [{ text: systemPrompt }] }
+        config
       });
       return response.text || "O modelo não retornou conteúdo.";
     }
