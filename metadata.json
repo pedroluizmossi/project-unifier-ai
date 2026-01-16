@@ -1,0 +1,5 @@
+{
+  "name": "Project Unifier AI",
+  "description": "Transform local codebase into AI-ready context and perform automated analysis using Gemini 3 Pro.",
+  "requestFramePermissions": []
+}
