@@ -40,12 +40,26 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ProjectSession {
   id: string;
   name: string;
   files: FileInfo[];
   summary: string;
-  chatHistory: ChatMessage[];
+  
+  // Legacy support (para migração)
+  chatHistory?: ChatMessage[];
+  
+  // New support
+  chats: ChatSession[];
+  
   lastUpdated: number;
   outputFormat: OutputFormat;
 }

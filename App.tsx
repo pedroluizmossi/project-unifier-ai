@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ProcessorStatus, FileInfo, OutputFormat, AppMode, ProjectSession, ChatMessage } from './types';
+import { ProcessorStatus, FileInfo, OutputFormat, AppMode, ProjectSession, ChatMessage, ChatSession } from './types';
 import { collectFileHandles, processFile, processFileList, generateOutput, calculateTokens } from './lib/utils';
 import { DEFAULT_IGNORE } from './constants';
 import { performProjectAnalysis } from './services/geminiService';
@@ -10,7 +10,7 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
-import { useTransition, animated, useSpring } from 'react-spring';
+import { useSpring, animated } from 'react-spring';
 
 const App: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -21,7 +21,9 @@ const App: React.FC = () => {
   const [directoryName, setDirectoryName] = useState<string | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('markdown');
-  const [showAI, setShowAI] = useState(false);
+  
+  // UI State
+  const [isContextOpen, setIsContextOpen] = useState(true);
   const [diffContent, setDiffContent] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,6 +32,10 @@ const App: React.FC = () => {
 
   const [projectSummary, setProjectSummary] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  
+  // Chat Multi-Session State
+  const [savedChats, setSavedChats] = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string>(crypto.randomUUID());
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +45,38 @@ const App: React.FC = () => {
     refreshSessions();
   }, []);
 
-  // Auto-save current session when important state changes
+  // Sync active chat history to savedChats list whenever history updates
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      setSavedChats(prev => {
+        const existingIndex = prev.findIndex(c => c.id === activeChatId);
+        
+        // Generate a title from the first user message if possible
+        const firstUserMsg = chatHistory.find(m => m.role === 'user');
+        const title = firstUserMsg 
+          ? (firstUserMsg.text.slice(0, 30) + (firstUserMsg.text.length > 30 ? '...' : '')) 
+          : 'Nova Conversa';
+
+        const updatedSession: ChatSession = {
+          id: activeChatId,
+          title: existingIndex >= 0 ? prev[existingIndex].title : title,
+          messages: chatHistory,
+          createdAt: existingIndex >= 0 ? prev[existingIndex].createdAt : Date.now(),
+          updatedAt: Date.now()
+        };
+
+        if (existingIndex >= 0) {
+          const newChats = [...prev];
+          newChats[existingIndex] = updatedSession;
+          return newChats;
+        } else {
+          return [updatedSession, ...prev];
+        }
+      });
+    }
+  }, [chatHistory, activeChatId]);
+
+  // Auto-save Project Session
   useEffect(() => {
     if (directoryName && files.length > 0) {
       const session: ProjectSession = {
@@ -47,14 +84,14 @@ const App: React.FC = () => {
         name: directoryName,
         files,
         summary: projectSummary,
-        chatHistory,
+        chats: savedChats, // Save all chats
         lastUpdated: Date.now(),
         outputFormat
       };
       if (!activeSessionId) setActiveSessionId(session.id);
       saveSession(session).then(refreshSessions);
     }
-  }, [files, projectSummary, chatHistory, outputFormat, directoryName]);
+  }, [files, projectSummary, savedChats, outputFormat, directoryName]);
 
   const refreshSessions = async () => {
     const list = await getSessions();
@@ -66,9 +103,34 @@ const App: React.FC = () => {
     setDirectoryName(session.name);
     setFiles(session.files);
     setProjectSummary(session.summary);
-    setChatHistory(session.chatHistory || []);
     setOutputFormat(session.outputFormat || 'markdown');
-    setShowAI(false);
+    
+    // Logic to handle Chat Migration or Loading
+    if (session.chats && session.chats.length > 0) {
+      setSavedChats(session.chats);
+      // Load the most recent chat
+      const mostRecent = session.chats[0];
+      setActiveChatId(mostRecent.id);
+      setChatHistory(mostRecent.messages);
+    } else if (session.chatHistory && session.chatHistory.length > 0) {
+      // Migrate legacy single history to new format
+      const legacyId = crypto.randomUUID();
+      const legacyChat: ChatSession = {
+        id: legacyId,
+        title: 'Histórico Recuperado',
+        messages: session.chatHistory,
+        createdAt: session.lastUpdated,
+        updatedAt: session.lastUpdated
+      };
+      setSavedChats([legacyChat]);
+      setActiveChatId(legacyId);
+      setChatHistory(session.chatHistory);
+    } else {
+      // New clean state
+      handleNewChatInternal();
+    }
+
+    setIsContextOpen(true);
   };
 
   const handleNewProject = () => {
@@ -76,8 +138,23 @@ const App: React.FC = () => {
     setDirectoryName(null);
     setFiles([]);
     setProjectSummary('');
+    handleNewChatInternal();
+    setIsContextOpen(true);
+  };
+
+  const handleNewChatInternal = () => {
+    const newId = crypto.randomUUID();
+    setActiveChatId(newId);
     setChatHistory([]);
-    setShowAI(false);
+    // We don't add to savedChats yet; it adds automatically when user types (useEffect)
+  };
+
+  const handleSelectChat = (chatId: string) => {
+    const chat = savedChats.find(c => c.id === chatId);
+    if (chat) {
+      setActiveChatId(chat.id);
+      setChatHistory(chat.messages);
+    }
   };
 
   const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
@@ -130,8 +207,8 @@ const App: React.FC = () => {
         setDirectoryName(name);
         setFiles(results.filter((f): f is FileInfo => f !== null));
         setProjectSummary('');
-        setChatHistory([]);
-        setActiveSessionId(null); // Will be created by auto-save effect
+        handleNewChatInternal();
+        setActiveSessionId(null); 
       } catch (err: any) {
         if (err.name !== 'AbortError') fileInputRef.current?.click();
       } finally { setIsProcessing(false); }
@@ -146,7 +223,7 @@ const App: React.FC = () => {
     const results = await processFileList(fileList, DEFAULT_IGNORE, 500);
     setFiles(results);
     setProjectSummary('');
-    setChatHistory([]);
+    handleNewChatInternal();
     setIsProcessing(false);
     e.target.value = '';
   };
@@ -165,17 +242,10 @@ const App: React.FC = () => {
     } finally { setIsGeneratingSummary(false); }
   };
 
-  // Animação para o layout principal (margem direita)
-  const mainLayoutSpring = useSpring({
-    marginRight: showAI ? 500 : 0,
-    config: { tension: 280, friction: 60 }
-  });
-
-  // Transição para o painel de IA
-  const panelTransition = useTransition(showAI, {
-    from: { transform: 'translateX(100%)', opacity: 0 },
-    enter: { transform: 'translateX(0%)', opacity: 1 },
-    leave: { transform: 'translateX(100%)', opacity: 0 },
+  // Animação do Painel Direito (Contexto)
+  const contextPanelSpring = useSpring({
+    width: isContextOpen ? 500 : 0,
+    opacity: isContextOpen ? 1 : 0,
     config: { tension: 280, friction: 60 }
   });
 
@@ -183,6 +253,7 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
       <input type="file" ref={fileInputRef} onChange={handleLegacyFileChange} className="hidden" {...({ webkitdirectory: "", directory: "" } as any)} />
       
+      {/* 1. Sidebar (Esquerda) */}
       <Sidebar 
         appMode={appMode} setAppMode={setAppMode} isProcessing={isProcessing}
         onSelectDirectory={handleSelectDirectory} outputFormat={outputFormat}
@@ -192,60 +263,57 @@ const App: React.FC = () => {
         onDeleteSession={handleDeleteSession} onNewProject={handleNewProject}
       />
 
-      <animated.div style={mainLayoutSpring} className="flex-1 flex flex-col min-w-0 relative">
-        <Header 
-          directoryName={directoryName}
-          showAI={showAI}
-          setShowAI={setShowAI}
-          hasFiles={files.some(f => f.selected)}
-          onDownload={() => {
-            const blob = new Blob([outputContent], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${directoryName || 'project'}_unified.${outputFormat === 'markdown' ? 'md' : outputFormat === 'json' ? 'json' : 'xml'}`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
+      {/* 2. Área Central (Chat) - Agora é o foco principal */}
+      <div className="flex-1 min-w-0 bg-slate-900 flex flex-col relative z-0">
+        <AIAnalysisPanel 
+          context={outputContent} 
+          diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
+          history={chatHistory}
+          onUpdateHistory={setChatHistory}
+          isContextOpen={isContextOpen}
+          toggleContext={() => setIsContextOpen(!isContextOpen)}
+          
+          // Novos props para gestão de chats
+          savedChats={savedChats}
+          activeChatId={activeChatId}
+          onNewChat={handleNewChatInternal}
+          onSelectChat={handleSelectChat}
         />
+      </div>
 
-        <div className="flex-1 overflow-auto bg-slate-950 p-8 scrollbar-hide">
-          {files.length > 0 ? (
-            <Dashboard 
-              files={files} stats={stats} availableLanguages={availableLanguages}
-              isGeneratingSummary={isGeneratingSummary} projectSummary={projectSummary}
-              onGenerateSummary={generateProjectSummary} outputContent={outputContent} outputFormat={outputFormat}
-            />
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center space-y-8 text-center animate-in fade-in">
-              <div className="w-32 h-32 rounded-[3rem] bg-slate-900 flex items-center justify-center text-6xl shadow-3xl border border-slate-800">🏢</div>
-              <div className="space-y-2">
-                <h3 className="text-2xl text-white font-black uppercase tracking-tight">Unifier Gemini 3</h3>
-                <p className="text-xs text-slate-500 max-w-[300px] leading-relaxed mx-auto uppercase tracking-widest">
-                  Seu cérebro persistente para análise de código local
-                </p>
-              </div>
-              <div className="flex gap-4">
-                <button onClick={handleSelectDirectory} className="px-10 py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-2xl active:scale-95">
-                  Abrir Workspace 📁
-                </button>
-              </div>
-            </div>
-          )}
+      {/* 3. Painel Direito (Contexto/Dashboard) - Colapsável */}
+      <animated.div style={contextPanelSpring} className="h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden shadow-2xl relative z-10">
+        <div className="w-[500px] h-full flex flex-col">
+          <Header 
+            directoryName={directoryName}
+            hasFiles={files.some(f => f.selected)}
+            onDownload={() => {
+              const blob = new Blob([outputContent], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${directoryName || 'project'}_unified.${outputFormat === 'markdown' ? 'md' : outputFormat === 'json' ? 'json' : 'xml'}`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          />
+
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+             {files.length > 0 ? (
+                <Dashboard 
+                  files={files} stats={stats} availableLanguages={availableLanguages}
+                  isGeneratingSummary={isGeneratingSummary} projectSummary={projectSummary}
+                  onGenerateSummary={generateProjectSummary} outputContent={outputContent} outputFormat={outputFormat}
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-50 space-y-4">
+                  <div className="text-4xl">📁</div>
+                  <p className="text-xs uppercase tracking-widest text-slate-500">Nenhum contexto carregado</p>
+                </div>
+              )}
+          </div>
         </div>
       </animated.div>
-
-      {panelTransition((style, item) => item && (
-        <animated.div style={style} className="fixed top-0 right-0 w-[500px] h-full z-20 shadow-2xl">
-          <AIAnalysisPanel 
-            context={outputContent} 
-            diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
-            onClose={() => setShowAI(false)}
-            history={chatHistory}
-            onUpdateHistory={setChatHistory}
-          />
-        </animated.div>
-      ))}
 
       <FileExplorerModal 
         isOpen={isModalOpen} 

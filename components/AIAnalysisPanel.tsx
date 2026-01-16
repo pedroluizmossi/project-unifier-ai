@@ -2,17 +2,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ANALYSIS_TEMPLATES } from '../constants';
 import { performProjectAnalysis } from '../services/geminiService';
-import { GeminiConfig, ChatMessage } from '../types';
+import { GeminiConfig, ChatMessage, ChatSession } from '../types';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useTransition, animated, config } from 'react-spring';
+import { useTransition, animated, config, useSpring } from 'react-spring';
 
 interface AIAnalysisPanelProps {
   context: string;
   diffContext?: string;
-  onClose: () => void;
   history: ChatMessage[];
   onUpdateHistory: (history: ChatMessage[]) => void;
+  isContextOpen: boolean;
+  toggleContext: () => void;
+  
+  // Props de Chat Múltiplo
+  savedChats: ChatSession[];
+  activeChatId: string;
+  onNewChat: () => void;
+  onSelectChat: (id: string) => void;
 }
 
 const DEFAULT_CONFIG: GeminiConfig = {
@@ -20,12 +27,16 @@ const DEFAULT_CONFIG: GeminiConfig = {
   useThinking: true
 };
 
-const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ context, diffContext, onClose, history, onUpdateHistory }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'chat'>('templates');
+const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ 
+  context, diffContext, history, onUpdateHistory, isContextOpen, toggleContext,
+  savedChats, activeChatId, onNewChat, onSelectChat
+}) => {
+  const [activeTab, setActiveTab] = useState<'templates' | 'chat'>('chat');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); // Estado para mostrar o menu de histórico
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const [geminiConfig, setGeminiConfig] = useState<GeminiConfig>(DEFAULT_CONFIG);
@@ -49,7 +60,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ context, diffContext,
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history, currentResponse, activeTab]);
+  }, [history, currentResponse, activeTab, isAnalyzing]);
 
   const startAnalysis = async (prompt: string) => {
     if (!context || !prompt.trim()) return;
@@ -90,34 +101,87 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ context, diffContext,
     config: config.gentle
   });
 
+  // Animação da gaveta de histórico
+  const historyDrawerSpring = useSpring({
+    transform: showHistory ? 'translateX(0%)' : 'translateX(-100%)',
+    opacity: showHistory ? 1 : 0,
+    config: { tension: 280, friction: 30 }
+  });
+
   return (
-    <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 shadow-2xl">
-      <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-xl">✨</div>
-          <div>
-            <h2 className="font-black text-sm text-white uppercase tracking-tight">Gemini 3 Studio</h2>
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-              {geminiConfig.model === 'gemini-3-pro-preview' ? 'Pro Mode' : 'Flash Mode'}
-            </p>
+    <div className="flex flex-col h-full w-full bg-slate-900 relative overflow-hidden">
+      
+      {/* Gaveta de Histórico de Chats */}
+      <animated.div style={historyDrawerSpring} className="absolute inset-y-0 left-0 w-72 bg-slate-900 border-r border-slate-800 z-30 shadow-2xl flex flex-col backdrop-blur-xl">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+          <h3 className="text-xs font-black text-white uppercase tracking-widest">Conversas</h3>
+          <button onClick={() => setShowHistory(false)} className="text-slate-500 hover:text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+          {savedChats.length === 0 && <p className="text-[10px] text-slate-500 text-center py-4">Nenhuma conversa salva.</p>}
+          {savedChats.sort((a,b) => b.updatedAt - a.updatedAt).map(chat => (
+            <button
+              key={chat.id}
+              onClick={() => { onSelectChat(chat.id); setShowHistory(false); }}
+              className={`w-full text-left p-3 rounded-xl border transition-all group ${chat.id === activeChatId ? 'bg-indigo-600/20 border-indigo-500/50' : 'bg-slate-800/20 border-slate-800/50 hover:bg-slate-800'}`}
+            >
+              <p className={`text-[11px] font-bold truncate ${chat.id === activeChatId ? 'text-indigo-300' : 'text-slate-300 group-hover:text-white'}`}>{chat.title || 'Nova Conversa'}</p>
+              <p className="text-[8px] text-slate-500 mt-1">{new Date(chat.updatedAt).toLocaleDateString()} {new Date(chat.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+            </button>
+          ))}
+        </div>
+      </animated.div>
+
+      {/* Overlay para fechar drawer ao clicar fora */}
+      {showHistory && <div className="absolute inset-0 bg-black/50 z-20 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>}
+
+      {/* Header do Chat */}
+      <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-20">
+        <div className="flex items-center gap-4">
+           {/* Botão de Toggle do Painel Direito */}
+           <button onClick={toggleContext} className={`p-2 rounded-lg border transition-all ${isContextOpen ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-slate-700 hover:text-white'}`} title={isContextOpen ? "Fechar Contexto" : "Ver Contexto"}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+           </button>
+
+           {/* Botão de Histórico */}
+           <button onClick={() => setShowHistory(true)} className="p-2 rounded-lg border border-slate-700 text-slate-500 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-2" title="Histórico de Chats">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+           </button>
+
+           <div className="h-6 w-px bg-slate-800 mx-1"></div>
+
+           <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-xl">✨</div>
+            <div>
+              <h2 className="font-black text-sm text-white uppercase tracking-tight">Gemini 3 Studio</h2>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                {geminiConfig.model === 'gemini-3-pro-preview' ? 'Pro Mode' : 'Flash Mode'}
+              </p>
+            </div>
           </div>
         </div>
+
         <div className="flex items-center gap-1">
-          <button onClick={() => { onUpdateHistory([]); setActiveTab('templates'); }} className="p-2 text-slate-500 hover:text-red-400 transition-colors" title="Limpar Chat">
-             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          <div className="bg-slate-800/50 p-1 rounded-lg border border-slate-700/50 mr-2">
+            <button onClick={() => setActiveTab('chat')} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'chat' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Chat</button>
+            <button onClick={() => setActiveTab('templates')} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'templates' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Templates</button>
+          </div>
+
+          <button onClick={onNewChat} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 border border-indigo-500/50 mr-2">
+             <span className="text-lg leading-none font-light">+</span> Novo Chat
           </button>
+
           <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-800'}`}>
              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          </button>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-500 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scrollbar-hide">
         {showSettings && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 space-y-4 animate-in slide-in-from-top-2">
+          <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 space-y-4 animate-in slide-in-from-top-2 max-w-lg mx-auto">
             <h3 className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
               <span className="w-1 h-3 bg-indigo-500 rounded-full"></span>
               Modelo e Raciocínio
@@ -156,70 +220,84 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ context, diffContext,
           </div>
         )}
 
-        <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
-          <button onClick={() => setActiveTab('templates')} className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all ${activeTab === 'templates' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Templates</button>
-          <button onClick={() => setActiveTab('chat')} className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all ${activeTab === 'chat' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Chat ({history.length})</button>
-        </div>
+        <div className="max-w-7xl mx-auto w-full space-y-8">
+          {activeTab === 'templates' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-2">
+              {ANALYSIS_TEMPLATES.map((tmpl) => (
+                <button key={tmpl.id} onClick={() => startAnalysis(tmpl.prompt)} disabled={isAnalyzing} className="text-left p-6 bg-slate-800/40 border border-slate-700/30 rounded-3xl hover:border-indigo-500/50 hover:bg-slate-800 transition-all group disabled:opacity-50">
+                  <div className="flex items-start gap-5">
+                    <div className="text-3xl p-3 bg-slate-900 rounded-2xl group-hover:scale-110 transition-transform shadow-lg">{tmpl.icon}</div>
+                    <div>
+                      <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-sm">{tmpl.name}</h4>
+                      <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{tmpl.description}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
-        {activeTab === 'templates' && (
-          <div className="grid grid-cols-1 gap-3">
-            {ANALYSIS_TEMPLATES.map((tmpl) => (
-              <button key={tmpl.id} onClick={() => startAnalysis(tmpl.prompt)} disabled={isAnalyzing} className="text-left p-4 bg-slate-800/40 border border-slate-700/30 rounded-2xl hover:border-indigo-500/50 hover:bg-slate-800 transition-all group disabled:opacity-50">
-                <div className="flex items-start gap-4">
-                  <div className="text-2xl p-2 bg-slate-900 rounded-xl group-hover:scale-110 transition-transform">{tmpl.icon}</div>
-                  <div>
-                    <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs">{tmpl.name}</h4>
-                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed line-clamp-2">{tmpl.description}</p>
+          {activeTab === 'chat' && (
+            <div className="space-y-8">
+              {messageTransitions((style, msg) => (
+                <animated.div style={style} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`w-full ${msg.role === 'user' ? 'max-w-[90%]' : 'max-w-[95%]'} p-6 rounded-3xl text-[14px] leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-md' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-md'}`}>
+                    <div className="prose prose-invert prose-slate max-w-none text-sm" 
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(msg.text) as string) }} />
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-2 uppercase font-black px-1 tracking-widest">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                </animated.div>
+              ))}
+              
+              {isAnalyzing && !currentResponse && (
+                <div className="flex flex-col items-start w-full animate-in fade-in duration-500">
+                  <div className="p-4 bg-slate-900/50 border border-indigo-500/20 rounded-2xl flex items-center gap-4 shadow-lg backdrop-blur-sm">
+                    <div className="relative w-6 h-6">
+                      <div className="absolute inset-0 border-2 border-indigo-500/30 rounded-full animate-ping"></div>
+                      <div className="absolute inset-0 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="flex flex-col">
+                       <span className="text-xs font-bold text-indigo-400 animate-pulse">Gemini 3 está pensando...</span>
+                       <span className="text-[9px] text-slate-500 uppercase tracking-widest">Analisando contexto do projeto</span>
+                    </div>
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
-        )}
+              )}
 
-        {activeTab === 'chat' && (
-          <div className="space-y-6">
-            {messageTransitions((style, msg) => (
-              <animated.div style={style} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[90%] p-4 rounded-2xl text-[11px] leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none'}`}>
-                  <div className="prose prose-invert prose-slate max-w-none text-xs" 
-                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(msg.text) as string) }} />
+              {currentResponse && (
+                <div className="flex flex-col items-start w-full">
+                  <div className="w-full max-w-[95%] p-6 bg-slate-800 border border-indigo-500/30 text-slate-200 rounded-3xl rounded-tl-md text-[14px] leading-relaxed shadow-2xl">
+                    <div className="prose prose-invert prose-slate max-w-none text-sm" 
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(currentResponse) as string) }} />
+                    {isAnalyzing && <span className="inline-block w-2 h-4 bg-indigo-500 animate-pulse ml-1 align-middle"></span>}
+                  </div>
                 </div>
-                <span className="text-[8px] text-slate-500 mt-2 uppercase font-black px-1">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-              </animated.div>
-            ))}
-            
-            {currentResponse && (
-              <div className="flex flex-col items-start">
-                <div className="max-w-[90%] p-4 bg-slate-800 border border-indigo-500/30 text-slate-200 rounded-2xl rounded-tl-none text-[11px] leading-relaxed">
-                  <div className="prose prose-invert prose-slate max-w-none text-xs" 
-                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(currentResponse) as string) }} />
-                  {isAnalyzing && <span className="inline-block w-2 h-4 bg-indigo-500 animate-pulse ml-1"></span>}
-                </div>
-              </div>
-            )}
-            {history.length === 0 && !currentResponse && (
-              <div className="py-20 text-center text-slate-500">
-                <p className="text-[10px] uppercase font-black tracking-widest">Nenhuma conversa ativa</p>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+
+              {history.length === 0 && !currentResponse && activeTab === 'chat' && (
+                 <div className="flex flex-col items-center justify-center py-32 space-y-6 opacity-40">
+                    <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center text-5xl grayscale">💬</div>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Comece uma conversa</p>
+                 </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="p-4 border-t border-slate-800 bg-slate-900/80">
-        <div className="relative">
+      <div className="p-6 border-t border-slate-800 bg-slate-900">
+        <div className="relative max-w-7xl mx-auto">
           <textarea 
             value={customPrompt} 
             onChange={(e) => setCustomPrompt(e.target.value)} 
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startAnalysis(customPrompt); }}}
             placeholder="Pergunte ao Gemini sobre o código..." 
-            className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 pl-4 pr-14 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-600 min-h-[60px] max-h-[200px] resize-none scrollbar-hide"
+            className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 pl-6 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-600 min-h-[60px] max-h-[200px] resize-none scrollbar-hide shadow-inner"
           />
           <button 
             onClick={() => startAnalysis(customPrompt)} 
             disabled={isAnalyzing || !customPrompt.trim()} 
-            className="absolute right-3 bottom-3 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all"
+            className="absolute right-3 bottom-3 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9-2-9-18-9 18 9 2zm0 0v-8" /></svg>
           </button>
