@@ -15,7 +15,7 @@ export type FileInfo = {
   line_count?: number;
   language?: string;
   sha256?: string;
-  selected?: boolean; // Novo campo para controle de seleção
+  selected?: boolean;
 };
 
 export interface ProcessorStatus {
@@ -28,3 +28,8 @@ export interface ProcessorStatus {
 
 export type OutputFormat = 'markdown' | 'json' | 'xml';
 export type AppMode = 'project' | 'mr_analysis';
+
+export interface GeminiConfig {
+  model: 'gemini-3-pro-preview' | 'gemini-3-flash-preview';
+  useThinking: boolean;
+}

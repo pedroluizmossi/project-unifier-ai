@@ -1,50 +1,59 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { GeminiConfig } from "../types";
 
 export const performProjectAnalysis = async (
   projectContext: string,
   userPrompt: string,
   onStream?: (chunk: string) => void,
-  diffContext?: string
+  diffContext?: string,
+  userConfig?: GeminiConfig
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelName = 'gemini-3-pro-preview';
+  
+  const modelName = userConfig?.model || 'gemini-3-pro-preview';
+  const useThinking = userConfig?.useThinking !== false;
+
+  // Orçamento de tokens para pensamento (Thinking Budget)
+  // Gemini 3 Pro suporta até 32768, Flash até 24576.
+  const budget = modelName === 'gemini-3-pro-preview' ? 32768 : 24576;
 
   const fullPrompt = `
     Você é um Arquiteto de Software Sênior e Revisor de Código Elite.
     
-    CONTEXTO DO PROJETO BASE:
+    CONTEXTO DO PROJETO:
     ---
     ${projectContext}
     ---
     
-    ${diffContext ? `MUDANÇAS PROPOSTAS (DIFF/PATCH):\n---\n${diffContext}\n---` : ''}
+    ${diffContext ? `MUDANÇAS PROPOSTAS (DIFF):\n---\n${diffContext}\n---` : ''}
     
     TAREFA:
     ${userPrompt}
     
     DIRETRIZES:
-    1. Use o Contexto do Projeto Base para entender as dependências e padrões.
-    2. Se houver um Diff, foque sua análise no impacto dessas mudanças sobre o código base.
-    3. Identifique riscos de regressão, violações de padrões e oportunidades de refatoração.
-    4. Forneça respostas estruturadas e técnicas.
+    - Analise o contexto profundamente.
+    - Seja técnico, preciso e identifique riscos arquiteturais ou de segurança.
   `;
 
-  try {
-    const config = {
-      temperature: 0.4, // Menor temperatura para análises técnicas mais precisas
-      thinkingConfig: { thinkingBudget: 32768 }
-    };
+  const config: any = {
+    temperature: 1.0,
+  };
 
+  if (useThinking) {
+    config.thinkingConfig = { thinkingBudget: budget };
+  }
+
+  try {
     if (onStream) {
-      const result = await ai.models.generateContentStream({
+      const responseStream = await ai.models.generateContentStream({
         model: modelName,
-        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        contents: [{ parts: [{ text: fullPrompt }] }],
         config
       });
 
       let fullText = '';
-      for await (const chunk of result) {
+      for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
           fullText += text;
@@ -53,15 +62,15 @@ export const performProjectAnalysis = async (
       }
       return fullText;
     } else {
-      const result = await ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: modelName,
-        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        contents: [{ parts: [{ text: fullPrompt }] }],
         config
       });
-      return result.text || "Sem resposta.";
+      return response.text || "O modelo não retornou conteúdo.";
     }
   } catch (error: any) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("Falha na análise. Verifique se o volume de dados não excedeu os limites.");
+    console.error("Gemini API Error:", error);
+    throw new Error(error.message || "Erro desconhecido na comunicação com o Gemini.");
   }
 };
