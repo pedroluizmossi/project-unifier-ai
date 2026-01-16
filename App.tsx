@@ -43,6 +43,19 @@ const App: React.FC = () => {
 
   const panelSpring = useSpring({ width: isContextOpen ? 500 : 0, opacity: isContextOpen ? 1 : 0 });
 
+  const handleDownload = () => {
+    const blob = new Blob([outputContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const extension = pm.outputFormat === 'markdown' ? 'md' : pm.outputFormat;
+    a.download = `${pm.directoryName || 'project'}_context.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
       <input 
@@ -75,7 +88,7 @@ const App: React.FC = () => {
 
       <animated.div style={panelSpring} className="h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden">
         <div className="w-[500px] h-full flex flex-col">
-          <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onDownload={() => {}} />
+          <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onDownload={handleDownload} />
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
             {pm.files.length > 0 ? (
               <Dashboard 

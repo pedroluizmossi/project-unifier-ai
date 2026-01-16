@@ -5,8 +5,9 @@ import { useAnalysis } from '../hooks/useAnalysis';
 import { fileToBase64 } from '../lib/utils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useTransition, animated, config } from 'react-spring';
-import AnalysisTemplates from './AnalysisTemplates';
+import { useTransition, config } from 'react-spring';
+import ChatMessageItem from './ChatMessageItem';
+import TemplateSelectorModal from './TemplateSelectorModal';
 
 interface AIAnalysisPanelProps {
   context: string;
@@ -30,6 +31,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
 
   const [showSettings, setShowSettings] = useState(false);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isTemplateModalOpen, setTemplateModalOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +66,14 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                setStagedAttachments(prev => [...prev, ...atts]);
                e.target.value = '';
              }} />
+
+      {/* Template Modal */}
+      <TemplateSelectorModal 
+        isOpen={isTemplateModalOpen} 
+        onClose={() => setTemplateModalOpen(false)}
+        onSelect={startAnalysis}
+        projectContext={props.context}
+      />
 
       {/* History Sidebar */}
       <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 bg-slate-900 border-r border-slate-800 transition-all duration-300 overflow-hidden flex flex-col`}>
@@ -143,40 +153,26 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
         {/* Messages Area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide">
           {props.history.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center">
-               <AnalysisTemplates onSelect={startAnalysis} />
+            <div className="h-full flex flex-col items-center justify-center space-y-6">
+               <div className="w-24 h-24 bg-indigo-600/10 text-indigo-400 rounded-3xl flex items-center justify-center text-5xl border border-indigo-500/20">
+                 🤖
+               </div>
+               <div className="text-center">
+                 <h3 className="text-xl font-bold text-white mb-2">Workspace Pronto</h3>
+                 <p className="text-slate-400 text-sm">Escolha uma estratégia de análise abaixo.</p>
+               </div>
+               <button 
+                  onClick={() => setTemplateModalOpen(true)}
+                  className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold uppercase tracking-wide shadow-xl transition-all active:scale-95 flex items-center gap-2"
+               >
+                 <span>Explorar Templates</span>
+                 <span>✨</span>
+               </button>
             </div>
           ) : (
             <div className="max-w-4xl mx-auto space-y-6 pb-4">
               {msgTransitions((style, msg) => (
-                <animated.div style={style} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-3xl p-5 shadow-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-tr-sm' 
-                      : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm'
-                  }`}>
-                    {/* Attachments Display */}
-                    {msg.attachments && msg.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b border-white/10">
-                        {msg.attachments.map((att, i) => (
-                          <div key={i} className="flex items-center gap-2 bg-black/20 rounded-lg py-1 px-3 text-xs">
-                             <span>📄</span>
-                             <span className="truncate max-w-[150px]">{att.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Message Content */}
-                    <div className="prose prose-invert prose-sm max-w-none leading-relaxed">
-                       <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(msg.text) as string) }} />
-                    </div>
-                    
-                    <div className={`text-[10px] mt-2 opacity-50 font-mono text-right ${msg.role === 'user' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </animated.div>
+                <ChatMessageItem key={msg.timestamp} message={msg} style={style} />
               ))}
               
               {/* Streaming / Loading Indicator */}
@@ -213,36 +209,46 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
               </div>
             )}
             
-            <div className="relative group">
-              <textarea
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-                placeholder="Pergunte sobre arquitetura, bugs ou solicite refatorações..."
-                className="w-full bg-slate-800/80 border border-slate-700 hover:border-slate-600 focus:border-indigo-500 rounded-2xl py-4 pl-12 pr-14 text-sm text-white shadow-xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all resize-none overflow-hidden"
-                rows={1}
-                style={{ minHeight: '60px' }}
-              />
-              
+            <div className="relative group flex gap-2">
               <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
-                title="Anexar arquivos"
+                 onClick={() => setTemplateModalOpen(true)}
+                 className="p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500/50 rounded-2xl text-xl transition-all"
+                 title="Abrir Templates"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                ✨
               </button>
 
-              <button 
-                onClick={handleSendMessage}
-                disabled={isAnalyzing || (!customPrompt.trim() && stagedAttachments.length === 0)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95"
-              >
-                {isAnalyzing ? (
-                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" /></svg>
-                )}
-              </button>
+              <div className="relative flex-1">
+                <textarea
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+                  placeholder="Pergunte sobre arquitetura, bugs ou solicite refatorações..."
+                  className="w-full bg-slate-800/80 border border-slate-700 hover:border-slate-600 focus:border-indigo-500 rounded-2xl py-4 pl-12 pr-14 text-sm text-white shadow-xl focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all resize-none overflow-hidden"
+                  rows={1}
+                  style={{ minHeight: '60px' }}
+                />
+                
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
+                  title="Anexar arquivos"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                </button>
+
+                <button 
+                  onClick={handleSendMessage}
+                  disabled={isAnalyzing || (!customPrompt.trim() && stagedAttachments.length === 0)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:shadow-none transition-all active:scale-95"
+                >
+                  {isAnalyzing ? (
+                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" /></svg>
+                  )}
+                </button>
+              </div>
             </div>
             <p className="text-center text-[10px] text-slate-600 mt-2">
               Gemini 3 Pro pode cometer erros. Revise códigos críticos.

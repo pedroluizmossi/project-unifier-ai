@@ -1,6 +1,6 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { GeminiConfig, Attachment } from "../types";
+import { GoogleGenAI, Type } from "@google/genai";
+import { GeminiConfig, Attachment, AnalysisTemplate } from "../types";
 
 export const performProjectAnalysis = async (
   projectContext: string,
@@ -127,5 +127,54 @@ export const generateProjectBlueprint = async (
     return response.text || "Falha ao gerar blueprint.";
   } catch (error: any) {
     throw new Error("Erro ao gerar Blueprint: " + error.message);
+  }
+};
+
+export const generateAdaptiveTemplates = async (
+  projectContext: string
+): Promise<AnalysisTemplate[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // Truncate context heavily for this specific task to save tokens/time, header files usually enough
+  const contextSnippet = projectContext.slice(0, 50000); 
+
+  const prompt = `
+    Analise este snippet de código de um projeto.
+    Gere 3 templates de prompts de análise ALTAMENTE ESPECÍFICOS para este projeto.
+    Por exemplo, se for React, sugira prompts sobre Hooks ou Re-renders. Se for Backend, sobre API ou DB.
+    
+    Retorne APENAS um JSON array.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview', // Flash is fast enough for this
+      contents: [{ parts: [{ text: `CONTEXTO:\n${contextSnippet}\n\n${prompt}` }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              name: { type: Type.STRING },
+              description: { type: Type.STRING },
+              prompt: { type: Type.STRING },
+              icon: { type: Type.STRING }
+            },
+            required: ["id", "name", "description", "prompt", "icon"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) return [];
+    
+    return JSON.parse(text) as AnalysisTemplate[];
+  } catch (error) {
+    console.error("Erro ao gerar templates adaptativos", error);
+    return [];
   }
 };
