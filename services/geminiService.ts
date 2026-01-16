@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { GeminiConfig, Attachment, AnalysisTemplate } from "../types";
+import { GeminiConfig, Attachment, AnalysisTemplate, ChatMessage } from "../types";
 
 export const performProjectAnalysis = async (
   projectContext: string,
@@ -9,7 +9,8 @@ export const performProjectAnalysis = async (
   diffContext?: string,
   userConfig?: GeminiConfig,
   projectSpec?: string,
-  attachments: Attachment[] = []
+  attachments: Attachment[] = [],
+  history: ChatMessage[] = []
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
@@ -37,6 +38,7 @@ export const performProjectAnalysis = async (
     2. Se a tarefa violar a arquitetura definida, alerte o usuário antes de prosseguir.
     3. Analise também quaisquer arquivos de apoio (anexos) fornecidos nesta mensagem.
     4. Seja técnico, preciso e mantenha a consistência com o estilo de código detectado.
+    5. Mantenha o contexto das mensagens anteriores da conversa.
   `;
 
   const config: any = {
@@ -47,15 +49,29 @@ export const performProjectAnalysis = async (
     config.thinkingConfig = { thinkingBudget: budget };
   }
 
-  // Added explicit type to parts array to allow mixing text and inlineData parts correctly for the Gemini API
-  const parts: any[] = [
-    { text: systemPrompt },
-    { text: `TAREFA DO USUÁRIO: ${userPrompt}` }
-  ];
+  // Map history to Gemini Content format
+  const historyContents = history.map(msg => {
+    const parts: any[] = [{ text: msg.text }];
+    if (msg.role === 'user' && msg.attachments) {
+      msg.attachments.forEach(att => {
+        parts.push({
+          inlineData: {
+            data: att.data,
+            mimeType: att.mimeType
+          }
+        });
+      });
+    }
+    return {
+      role: msg.role,
+      parts
+    };
+  });
 
-  // Adicionar anexos se existirem
+  // Construct current user message parts
+  const currentParts: any[] = [{ text: `TAREFA DO USUÁRIO: ${userPrompt}` }];
   attachments.forEach(att => {
-    parts.push({
+    currentParts.push({
       inlineData: {
         data: att.data,
         mimeType: att.mimeType
@@ -63,12 +79,18 @@ export const performProjectAnalysis = async (
     });
   });
 
+  const contents = [
+    ...historyContents,
+    { role: 'user', parts: currentParts }
+  ];
+
   try {
     if (onStream) {
       const responseStream = await ai.models.generateContentStream({
         model: modelName,
-        contents: [{ parts }],
-        config
+        contents,
+        config,
+        systemInstruction: { parts: [{ text: systemPrompt }] }
       });
 
       let fullText = '';
@@ -83,8 +105,9 @@ export const performProjectAnalysis = async (
     } else {
       const response = await ai.models.generateContent({
         model: modelName,
-        contents: [{ parts }],
-        config
+        contents,
+        config,
+        systemInstruction: { parts: [{ text: systemPrompt }] }
       });
       return response.text || "O modelo não retornou conteúdo.";
     }

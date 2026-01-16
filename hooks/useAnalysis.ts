@@ -49,7 +49,8 @@ export const useAnalysis = (
       const fullResponse = await performProjectAnalysis(
         context, prompt, 
         (chunk) => setCurrentResponse(prev => prev + chunk), 
-        diffContext, geminiConfig, projectSpec, attachments
+        diffContext, geminiConfig, projectSpec, attachments,
+        history
       );
       onUpdateHistory([...updatedHistory, { role: 'model', text: fullResponse, timestamp: Date.now() }]);
       setCurrentResponse('');
