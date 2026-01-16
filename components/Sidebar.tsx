@@ -90,12 +90,20 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <span>💬</span> Nova Conversa
                   </button>
                   
-                  <button 
-                    onClick={openFileExplorer}
-                    className="w-full py-2.5 bg-[#1e1e24] hover:bg-[#2d2e35] text-slate-300 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/5"
-                  >
-                    <span>🔍</span> Gerenciar Workspace ({stats.text})
-                  </button>
+                  <div className="grid grid-cols-1 gap-2">
+                    <button 
+                      onClick={openFileExplorer}
+                      className="w-full py-2.5 bg-[#1e1e24] hover:bg-[#2d2e35] text-slate-300 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/5"
+                    >
+                      <span>🔍</span> Explorar Arquivos ({stats.text})
+                    </button>
+                    <button 
+                      onClick={onSelectDirectory}
+                      className="w-full py-2.5 bg-transparent hover:bg-white/5 text-slate-500 hover:text-slate-300 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-dashed border-white/10"
+                    >
+                      <span>➕</span> Novo Projeto
+                    </button>
+                  </div>
                 </>
               )}
             </div>

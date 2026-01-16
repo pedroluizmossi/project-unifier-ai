@@ -1,5 +1,5 @@
 
-import { FileInfo, OutputFormat, Attachment } from '../types';
+import { FileInfo, OutputFormat } from '../types';
 
 export const calculateTokens = (text: string) => Math.ceil(text.length / 4);
 
@@ -124,4 +124,57 @@ export const generateOutput = (
   }
 
   return "";
+};
+
+// --- Árvore de Arquivos ---
+export interface FileNode {
+  name: string;
+  path: string;
+  kind: 'file' | 'directory';
+  children?: FileNode[];
+  fileInfo?: FileInfo;
+}
+
+export const buildFileTree = (files: FileInfo[]): FileNode[] => {
+  const root: FileNode[] = [];
+  
+  files.forEach(file => {
+    const parts = file.path.split('/');
+    let currentLevel = root;
+    let currentPath = '';
+
+    parts.forEach((part, index) => {
+      currentPath += (index > 0 ? '/' : '') + part;
+      const isLast = index === parts.length - 1;
+      
+      let node = currentLevel.find(n => n.name === part);
+      
+      if (!node) {
+        node = {
+          name: part,
+          path: currentPath,
+          kind: isLast ? 'file' : 'directory',
+          children: isLast ? undefined : [],
+          fileInfo: isLast ? file : undefined
+        };
+        currentLevel.push(node);
+      }
+      
+      if (node.children) {
+        currentLevel = node.children;
+      }
+    });
+  });
+
+  // Ordenar: Diretórios primeiro, depois arquivos
+  const sortNodes = (nodes: FileNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach(n => n.children && sortNodes(n.children));
+  };
+  
+  sortNodes(root);
+  return root;
 };

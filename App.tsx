@@ -133,9 +133,13 @@ const App: React.FC = () => {
       </animated.div>
 
       <FileExplorerModal 
-        isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} filteredFiles={filteredFiles}
-        searchTerm={searchTerm} setSearchTerm={setSearchTerm} langFilter={langFilter} setLangFilter={setLangFilter}
+        isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} 
+        filteredFiles={filteredFiles}
+        allFiles={pm.files}
+        searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
+        langFilter={langFilter} setLangFilter={setLangFilter}
         availableLanguages={availableLanguages} totalSelected={stats.text} totalTokens={stats.tokens}
+        onSelectNewDirectory={pm.handleSelectDirectory}
         toggleFileSelection={path => pm.setFiles(prev => prev.map(f => f.path === path ? { ...f, selected: !f.selected } : f))}
         handleBulkAction={action => pm.setFiles(prev => prev.map(f => {
           const visible = filteredFiles.some(ff => ff.path === f.path);
