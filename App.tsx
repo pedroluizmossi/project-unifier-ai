@@ -1,16 +1,21 @@
 
-import React, { useState, useMemo, useRef } from 'react';
-import { ProcessorStatus, FileInfo, OutputFormat, AppMode } from './types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ProcessorStatus, FileInfo, OutputFormat, AppMode, ProjectSession, ChatMessage } from './types';
 import { collectFileHandles, processFile, processFileList, generateOutput, calculateTokens } from './lib/utils';
 import { DEFAULT_IGNORE } from './constants';
 import { performProjectAnalysis } from './services/geminiService';
+import { saveSession, getSessions, deleteSession } from './lib/storage';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
+import { useTransition, animated, useSpring } from 'react-spring';
 
 const App: React.FC = () => {
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ProjectSession[]>([]);
+  
   const [appMode, setAppMode] = useState<AppMode>('project');
   const [isProcessing, setIsProcessing] = useState(false);
   const [directoryName, setDirectoryName] = useState<string | null>(null);
@@ -25,8 +30,62 @@ const App: React.FC = () => {
 
   const [projectSummary, setProjectSummary] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load Sessions on mount
+  useEffect(() => {
+    refreshSessions();
+  }, []);
+
+  // Auto-save current session when important state changes
+  useEffect(() => {
+    if (directoryName && files.length > 0) {
+      const session: ProjectSession = {
+        id: activeSessionId || crypto.randomUUID(),
+        name: directoryName,
+        files,
+        summary: projectSummary,
+        chatHistory,
+        lastUpdated: Date.now(),
+        outputFormat
+      };
+      if (!activeSessionId) setActiveSessionId(session.id);
+      saveSession(session).then(refreshSessions);
+    }
+  }, [files, projectSummary, chatHistory, outputFormat, directoryName]);
+
+  const refreshSessions = async () => {
+    const list = await getSessions();
+    setSessions(list);
+  };
+
+  const loadSession = (session: ProjectSession) => {
+    setActiveSessionId(session.id);
+    setDirectoryName(session.name);
+    setFiles(session.files);
+    setProjectSummary(session.summary);
+    setChatHistory(session.chatHistory || []);
+    setOutputFormat(session.outputFormat || 'markdown');
+    setShowAI(false);
+  };
+
+  const handleNewProject = () => {
+    setActiveSessionId(null);
+    setDirectoryName(null);
+    setFiles([]);
+    setProjectSummary('');
+    setChatHistory([]);
+    setShowAI(false);
+  };
+
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteSession(id);
+    if (activeSessionId === id) handleNewProject();
+    refreshSessions();
+  };
 
   const availableLanguages = useMemo(() => {
     const langs = new Set<string>();
@@ -64,11 +123,15 @@ const App: React.FC = () => {
       try {
         const handle = await (window as any).showDirectoryPicker();
         setIsProcessing(true);
-        setDirectoryName(handle.name);
+        const name = handle.name;
         const handles = await collectFileHandles(handle, DEFAULT_IGNORE);
         const results = await Promise.all(handles.map(h => processFile(h.handle, h.path, 500)));
+        
+        setDirectoryName(name);
         setFiles(results.filter((f): f is FileInfo => f !== null));
         setProjectSummary('');
+        setChatHistory([]);
+        setActiveSessionId(null); // Will be created by auto-save effect
       } catch (err: any) {
         if (err.name !== 'AbortError') fileInputRef.current?.click();
       } finally { setIsProcessing(false); }
@@ -83,6 +146,7 @@ const App: React.FC = () => {
     const results = await processFileList(fileList, DEFAULT_IGNORE, 500);
     setFiles(results);
     setProjectSummary('');
+    setChatHistory([]);
     setIsProcessing(false);
     e.target.value = '';
   };
@@ -91,7 +155,7 @@ const App: React.FC = () => {
     if (!outputContent) return;
     setIsGeneratingSummary(true);
     try {
-      const saved = localStorage.getItem('gemini_config');
+      const saved = localStorage.getItem('gemini_config_v2');
       const config = saved ? JSON.parse(saved) : undefined;
       const prompt = "Faça um Raio-X profundo: 1. Stack, 2. Arquitetura, 3. Fluxos. Use Gemini 3.";
       const result = await performProjectAnalysis(outputContent, prompt, undefined, undefined, config);
@@ -101,15 +165,19 @@ const App: React.FC = () => {
     } finally { setIsGeneratingSummary(false); }
   };
 
-  const handleDownload = () => {
-    const blob = new Blob([outputContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${directoryName || 'project'}_unified.${outputFormat === 'markdown' ? 'md' : outputFormat === 'json' ? 'json' : 'xml'}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  // Animação para o layout principal (margem direita)
+  const mainLayoutSpring = useSpring({
+    marginRight: showAI ? 500 : 0,
+    config: { tension: 280, friction: 60 }
+  });
+
+  // Transição para o painel de IA
+  const panelTransition = useTransition(showAI, {
+    from: { transform: 'translateX(100%)', opacity: 0 },
+    enter: { transform: 'translateX(0%)', opacity: 1 },
+    leave: { transform: 'translateX(100%)', opacity: 0 },
+    config: { tension: 280, friction: 60 }
+  });
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
@@ -120,15 +188,25 @@ const App: React.FC = () => {
         onSelectDirectory={handleSelectDirectory} outputFormat={outputFormat}
         setOutputFormat={setOutputFormat} files={files} openFileExplorer={() => setIsModalOpen(true)}
         stats={stats} directoryName={directoryName} diffContent={diffContent} setDiffContent={setDiffContent}
+        sessions={sessions} onSelectSession={loadSession} activeSessionId={activeSessionId}
+        onDeleteSession={handleDeleteSession} onNewProject={handleNewProject}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${showAI ? 'mr-[500px]' : ''}`}>
+      <animated.div style={mainLayoutSpring} className="flex-1 flex flex-col min-w-0 relative">
         <Header 
           directoryName={directoryName}
           showAI={showAI}
           setShowAI={setShowAI}
           hasFiles={files.some(f => f.selected)}
-          onDownload={handleDownload}
+          onDownload={() => {
+            const blob = new Blob([outputContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${directoryName || 'project'}_unified.${outputFormat === 'markdown' ? 'md' : outputFormat === 'json' ? 'json' : 'xml'}`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
         />
 
         <div className="flex-1 overflow-auto bg-slate-950 p-8 scrollbar-hide">
@@ -144,26 +222,30 @@ const App: React.FC = () => {
               <div className="space-y-2">
                 <h3 className="text-2xl text-white font-black uppercase tracking-tight">Unifier Gemini 3</h3>
                 <p className="text-xs text-slate-500 max-w-[300px] leading-relaxed mx-auto uppercase tracking-widest">
-                  Processamento inteligente para sua base de código local
+                  Seu cérebro persistente para análise de código local
                 </p>
               </div>
-              <button onClick={handleSelectDirectory} className="px-12 py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-2xl">
-                Abrir Workspace 📁
-              </button>
+              <div className="flex gap-4">
+                <button onClick={handleSelectDirectory} className="px-10 py-4 bg-white text-black rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-2xl active:scale-95">
+                  Abrir Workspace 📁
+                </button>
+              </div>
             </div>
           )}
         </div>
-      </div>
+      </animated.div>
 
-      {showAI && (
-        <div className="fixed top-0 right-0 w-[500px] h-full z-20 shadow-2xl border-l border-slate-800">
+      {panelTransition((style, item) => item && (
+        <animated.div style={style} className="fixed top-0 right-0 w-[500px] h-full z-20 shadow-2xl">
           <AIAnalysisPanel 
             context={outputContent} 
             diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
-            onClose={() => setShowAI(false)} 
+            onClose={() => setShowAI(false)}
+            history={chatHistory}
+            onUpdateHistory={setChatHistory}
           />
-        </div>
-      )}
+        </animated.div>
+      ))}
 
       <FileExplorerModal 
         isOpen={isModalOpen} 

@@ -33,3 +33,19 @@ export interface GeminiConfig {
   model: 'gemini-3-pro-preview' | 'gemini-3-flash-preview';
   useThinking: boolean;
 }
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+}
+
+export interface ProjectSession {
+  id: string;
+  name: string;
+  files: FileInfo[];
+  summary: string;
+  chatHistory: ChatMessage[];
+  lastUpdated: number;
+  outputFormat: OutputFormat;
+}
