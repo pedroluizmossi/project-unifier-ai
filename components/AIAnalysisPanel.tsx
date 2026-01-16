@@ -96,8 +96,10 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
               </button>
             )}
             <div className="flex items-center gap-2 px-3 py-1 bg-[#1e1e24] rounded-full border border-white/5 shadow-sm">
-              <span className="text-xs font-medium text-slate-300">Gemini 3 Pro</span>
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              <span className="text-xs font-medium text-slate-300">
+                {geminiConfig.model.includes('flash') ? 'Gemini 3 Flash' : 'Gemini 3 Pro'}
+              </span>
+              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${geminiConfig.useThinking ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
             </div>
           </div>
           
