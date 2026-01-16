@@ -1,35 +1,41 @@
 
-import React from 'react';
 import { AnalysisTemplate } from './types';
 
 export const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
     id: 'mr-review',
     name: 'Merge Request Review',
-    description: 'Análise rigorosa das mudanças (diff) comparando com o contexto base do projeto.',
+    description: 'Análise rigorosa das mudanças (diff) comparando com o código base.',
     prompt: 'Analise este Merge Request (Diff). Compare as mudanças com o código base fornecido. Identifique bugs introduzidos, inconsistências de estilo e sugira melhorias focadas apenas no código alterado.',
     icon: '🔍'
   },
   {
-    id: 'impact-analysis',
-    name: 'Impact & Side Effects',
-    description: 'Descubra efeitos colaterais: onde este diff pode quebrar o sistema?',
-    prompt: 'Com base no Diff fornecido e no código base do projeto, identifique possíveis efeitos colaterais. Quais componentes ou funções que não foram alterados podem ser afetados por essas mudanças? Existe risco de regressão?',
-    icon: '🌊'
+    id: 'security-audit',
+    name: 'Security Guard (OWASP)',
+    description: 'Busca por vulnerabilidades como SQL Injection, XSS ou vazamento de segredos.',
+    prompt: 'Atue como um Especialista em Segurança. Analise o contexto fornecido em busca de falhas de segurança conhecidas (OWASP Top 10). Verifique sanitização de inputs, gestão de segredos e permissões. Se encontrar algo, forneça a correção imediata.',
+    icon: '🛡️'
+  },
+  {
+    id: 'performance-pro',
+    name: 'Performance & Scalability',
+    description: 'Identifique gargalos de processamento, queries lentas ou re-renders excessivos.',
+    prompt: 'Analise o desempenho deste código. Procure por loops ineficientes, complexidade O(n^2) desnecessária, falta de memoização (se for React) e sugira otimizações que reduzam o consumo de CPU/Memória.',
+    icon: '🚀'
+  },
+  {
+    id: 'arch-viz',
+    name: 'Visualize Architecture',
+    description: 'Gera diagramas Mermaid para explicar o fluxo de dados e componentes.',
+    prompt: 'Crie uma representação visual deste projeto usando diagramas Mermaid. Inclua um Diagrama de Sequência para o fluxo principal e um Diagrama de Classes ou Entidades. Use o formato ```mermaid para que eu possa renderizar.',
+    icon: '🗺️'
   },
   {
     id: 'tech-spec',
     name: 'Technical Specification',
-    description: 'Documentação completa do projeto no estilo Events-Hub.',
-    prompt: 'Analyze this project and generate a comprehensive Technical Specification. Include an Overview, Macro Architecture (with Mermaid diagram), Component View, Architectural Decisions (ADRs), full Tech Stack list, and a detailed Data Model description.',
+    description: 'Documentação completa e estruturada do sistema.',
+    prompt: 'Gere uma Especificação Técnica detalhada. Inclua Visão Geral, Stack Tecnológica, Decisões de Arquitetura (ADRs) e Modelo de Dados.',
     icon: '📄'
-  },
-  {
-    id: 'breaking-changes',
-    name: 'Breaking Changes Audit',
-    description: 'Verifique se o patch altera contratos, APIs ou esquemas de banco de dados.',
-    prompt: 'Foque nas mudanças do Diff. Existem alterações em assinaturas de métodos públicos, APIs ou contratos de dados? Liste todas as possíveis Breaking Changes e quem deve ser avisado.',
-    icon: '💥'
   }
 ];
 

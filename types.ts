@@ -15,6 +15,7 @@ export type FileInfo = {
   line_count?: number;
   language?: string;
   sha256?: string;
+  selected?: boolean; // Novo campo para controle de seleção
 };
 
 export interface ProcessorStatus {

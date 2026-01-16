@@ -42,7 +42,7 @@ export const processFile = async (
     const file = fileHandle instanceof File ? fileHandle : await (fileHandle as FileSystemFileHandle).getFile();
     
     if (file.size > maxSize * 1024) {
-      return { path, size_kb: file.size / 1024, type: 'large_file' };
+      return { path, size_kb: file.size / 1024, type: 'large_file', selected: false };
     }
     
     try {
@@ -53,10 +53,11 @@ export const processFile = async (
         type: 'text_file',
         content,
         line_count: content.split('\n').length,
-        language: path.split('.').pop() || 'text'
+        language: path.split('.').pop() || 'text',
+        selected: true // Por padrão, arquivos de texto são selecionados
       };
     } catch {
-      return { path, size_kb: file.size / 1024, type: 'binary_file' };
+      return { path, size_kb: file.size / 1024, type: 'binary_file', selected: false };
     }
   } catch (e) {
     return null;
@@ -71,7 +72,6 @@ export const processFileList = async (
   const results: FileInfo[] = [];
   for (let i = 0; i < fileList.length; i++) {
     const file = fileList[i];
-    // webkitRelativePath contains the full path from the selected root
     const path = file.webkitRelativePath || file.name;
     
     const isIgnored = patterns.some(p => path.includes(p));
@@ -88,21 +88,24 @@ export const generateOutput = (
   files: FileInfo[], 
   format: OutputFormat
 ): string => {
+  // Filtramos apenas os arquivos selecionados para gerar o output
+  const selectedFiles = files.filter(f => f.selected && f.type === 'text_file');
+
   if (format === 'markdown') {
     let md = `# Project: ${projectName}\n\n`;
-    files.filter(f => f.type === 'text_file').forEach(f => {
+    selectedFiles.forEach(f => {
       md += `## File: ${f.path}\n\`\`\`${f.language}\n${f.content}\n\`\`\`\n\n`;
     });
     return md;
   }
   
   if (format === 'json') {
-    return JSON.stringify({ projectName, files, timestamp: new Date().toISOString() }, null, 2);
+    return JSON.stringify({ projectName, files: selectedFiles, timestamp: new Date().toISOString() }, null, 2);
   }
 
   if (format === 'xml') {
      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<project name="${projectName}">\n`;
-     files.filter(f => f.type === 'text_file').forEach(f => {
+     selectedFiles.forEach(f => {
         xml += `  <file path="${f.path}">\n    <![CDATA[${f.content}]]>\n  </file>\n`;
      });
      xml += `</project>`;
