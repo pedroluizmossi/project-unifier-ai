@@ -2,20 +2,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ANALYSIS_TEMPLATES } from '../constants';
 import { performProjectAnalysis } from '../services/geminiService';
-import { GeminiConfig, ChatMessage, ChatSession } from '../types';
+import { GeminiConfig, ChatMessage, ChatSession, Attachment } from '../types';
+import { fileToBase64 } from '../lib/utils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useTransition, animated, config, useSpring } from 'react-spring';
 
 interface AIAnalysisPanelProps {
   context: string;
+  projectSpec?: string;
   diffContext?: string;
   history: ChatMessage[];
   onUpdateHistory: (history: ChatMessage[]) => void;
   isContextOpen: boolean;
   toggleContext: () => void;
   
-  // Props de Chat Múltiplo
   savedChats: ChatSession[];
   activeChatId: string;
   onNewChat: () => void;
@@ -28,7 +29,7 @@ const DEFAULT_CONFIG: GeminiConfig = {
 };
 
 const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({ 
-  context, diffContext, history, onUpdateHistory, isContextOpen, toggleContext,
+  context, projectSpec, diffContext, history, onUpdateHistory, isContextOpen, toggleContext,
   savedChats, activeChatId, onNewChat, onSelectChat
 }) => {
   const [activeTab, setActiveTab] = useState<'templates' | 'chat'>('chat');
@@ -36,9 +37,13 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
   const [currentResponse, setCurrentResponse] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false); // Estado para mostrar o menu de histórico
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
   
+  // Staged files for next message
+  const [stagedAttachments, setStagedAttachments] = useState<Attachment[]>([]);
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [geminiConfig, setGeminiConfig] = useState<GeminiConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
@@ -62,10 +67,41 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
     }
   }, [history, currentResponse, activeTab, isAnalyzing]);
 
-  const startAnalysis = async (prompt: string) => {
-    if (!context || !prompt.trim()) return;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
     
-    const userMsg: ChatMessage = { role: 'user', text: prompt, timestamp: Date.now() };
+    const newAttachments: Attachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const base64Data = await fileToBase64(file);
+        newAttachments.push({
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          data: base64Data
+        });
+      } catch (err) {
+        console.error("Error processing attachment:", err);
+      }
+    }
+    setStagedAttachments(prev => [...prev, ...newAttachments]);
+    e.target.value = '';
+  };
+
+  const removeStagedAttachment = (index: number) => {
+    setStagedAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const startAnalysis = async (prompt: string, attachments: Attachment[] = []) => {
+    if (!context || (!prompt.trim() && attachments.length === 0)) return;
+    
+    const userMsg: ChatMessage = { 
+      role: 'user', 
+      text: prompt, 
+      timestamp: Date.now(),
+      attachments: attachments.length > 0 ? attachments : undefined
+    };
     const updatedHistory = [...history, userMsg];
     onUpdateHistory(updatedHistory);
     
@@ -74,6 +110,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
     setActiveTab('chat');
     setShowSettings(false);
     setCustomPrompt('');
+    setStagedAttachments([]);
     
     try {
       const fullResponse = await performProjectAnalysis(
@@ -81,7 +118,9 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
         prompt, 
         (chunk) => setCurrentResponse(prev => prev + chunk), 
         diffContext, 
-        geminiConfig
+        geminiConfig,
+        projectSpec,
+        attachments
       );
       
       const modelMsg: ChatMessage = { role: 'model', text: fullResponse, timestamp: Date.now() };
@@ -101,7 +140,6 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
     config: config.gentle
   });
 
-  // Animação da gaveta de histórico
   const historyDrawerSpring = useSpring({
     transform: showHistory ? 'translateX(0%)' : 'translateX(-100%)',
     opacity: showHistory ? 1 : 0,
@@ -110,8 +148,14 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 relative overflow-hidden">
+      <input 
+        type="file" 
+        multiple 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        className="hidden" 
+      />
       
-      {/* Gaveta de Histórico de Chats */}
       <animated.div style={historyDrawerSpring} className="absolute inset-y-0 left-0 w-72 bg-slate-900 border-r border-slate-800 z-30 shadow-2xl flex flex-col backdrop-blur-xl">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
           <h3 className="text-xs font-black text-white uppercase tracking-widest">Conversas</h3>
@@ -134,21 +178,24 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
         </div>
       </animated.div>
 
-      {/* Overlay para fechar drawer ao clicar fora */}
       {showHistory && <div className="absolute inset-0 bg-black/50 z-20 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>}
 
-      {/* Header do Chat */}
       <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-4">
-           {/* Botão de Toggle do Painel Direito */}
            <button onClick={toggleContext} className={`p-2 rounded-lg border transition-all ${isContextOpen ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-slate-700 hover:text-white'}`} title={isContextOpen ? "Fechar Contexto" : "Ver Contexto"}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
            </button>
 
-           {/* Botão de Histórico */}
            <button onClick={() => setShowHistory(true)} className="p-2 rounded-lg border border-slate-700 text-slate-500 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-2" title="Histórico de Chats">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
            </button>
+
+           {projectSpec && (
+             <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,1)]"></div>
+                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Blueprint Active</span>
+             </div>
+           )}
 
            <div className="h-6 w-px bg-slate-800 mx-1"></div>
 
@@ -242,6 +289,20 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
               {messageTransitions((style, msg) => (
                 <animated.div style={style} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className={`w-full ${msg.role === 'user' ? 'max-w-[90%]' : 'max-w-[95%]'} p-6 rounded-3xl text-[14px] leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-md' : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-md'}`}>
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {msg.attachments.map((att, idx) => (
+                          <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-900/40 rounded-lg border border-indigo-500/30">
+                            {att.mimeType.startsWith('image/') ? (
+                              <img src={`data:${att.mimeType};base64,${att.data}`} className="w-8 h-8 rounded object-cover" alt="" />
+                            ) : (
+                              <span className="text-lg">📄</span>
+                            )}
+                            <span className="text-[10px] font-bold text-indigo-200 truncate max-w-[120px]">{att.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="prose prose-invert prose-slate max-w-none text-sm" 
                         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(msg.text) as string) }} />
                   </div>
@@ -258,7 +319,9 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
                     </div>
                     <div className="flex flex-col">
                        <span className="text-xs font-bold text-indigo-400 animate-pulse">Gemini 3 está pensando...</span>
-                       <span className="text-[9px] text-slate-500 uppercase tracking-widest">Analisando contexto do projeto</span>
+                       <span className="text-[9px] text-slate-500 uppercase tracking-widest">
+                         {projectSpec ? 'Raciocinando com Blueprint' : 'Analisando contexto'}
+                       </span>
                     </div>
                   </div>
                 </div>
@@ -277,7 +340,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
               {history.length === 0 && !currentResponse && activeTab === 'chat' && (
                  <div className="flex flex-col items-center justify-center py-32 space-y-6 opacity-40">
                     <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center text-5xl grayscale">💬</div>
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Comece uma conversa</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Comece uma conversa ou anexe arquivos de apoio</p>
                  </div>
               )}
             </div>
@@ -286,21 +349,51 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
       </div>
 
       <div className="p-6 border-t border-slate-800 bg-slate-900">
-        <div className="relative max-w-7xl mx-auto">
-          <textarea 
-            value={customPrompt} 
-            onChange={(e) => setCustomPrompt(e.target.value)} 
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startAnalysis(customPrompt); }}}
-            placeholder="Pergunte ao Gemini sobre o código..." 
-            className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 pl-6 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-600 min-h-[60px] max-h-[200px] resize-none scrollbar-hide shadow-inner"
-          />
-          <button 
-            onClick={() => startAnalysis(customPrompt)} 
-            disabled={isAnalyzing || !customPrompt.trim()} 
-            className="absolute right-3 bottom-3 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9-2-9-18-9 18 9 2zm0 0v-8" /></svg>
-          </button>
+        <div className="max-w-7xl mx-auto space-y-4">
+          {stagedAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 animate-in slide-in-from-bottom-2">
+               {stagedAttachments.map((att, idx) => (
+                 <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-indigo-500/30 rounded-xl relative group">
+                    {att.mimeType.startsWith('image/') ? (
+                       <img src={`data:${att.mimeType};base64,${att.data}`} className="w-6 h-6 rounded object-cover" alt="" />
+                    ) : (
+                       <span className="text-base">📄</span>
+                    )}
+                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest truncate max-w-[100px]">{att.name}</span>
+                    <button 
+                      onClick={() => removeStagedAttachment(idx)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition-opacity"
+                    >✕</button>
+                 </div>
+               ))}
+            </div>
+          )}
+
+          <div className="relative">
+            <textarea 
+              value={customPrompt} 
+              onChange={(e) => setCustomPrompt(e.target.value)} 
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startAnalysis(customPrompt, stagedAttachments); }}}
+              placeholder="Pergunte ao Gemini ou anexe arquivos de apoio..." 
+              className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 pl-14 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-600 min-h-[60px] max-h-[200px] resize-none scrollbar-hide shadow-inner"
+            />
+            
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute left-3 bottom-3 p-2 text-slate-500 hover:text-indigo-400 hover:bg-slate-700 rounded-xl transition-all"
+              title="Anexar arquivos de apoio"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+            </button>
+
+            <button 
+              onClick={() => startAnalysis(customPrompt, stagedAttachments)} 
+              disabled={isAnalyzing || (!customPrompt.trim() && stagedAttachments.length === 0)} 
+              className="absolute right-3 bottom-3 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9-2-9-18-9 18 9 2zm0 0v-8" /></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

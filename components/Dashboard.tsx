@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FileInfo, OutputFormat } from '../types';
 import { formatBytes } from '../lib/utils';
 import { marked } from 'marked';
@@ -12,6 +12,7 @@ interface DashboardProps {
   availableLanguages: string[];
   isGeneratingSummary: boolean;
   projectSummary: string;
+  projectSpec?: string; // Nova prop
   onGenerateSummary: () => void;
   outputContent: string;
   outputFormat: OutputFormat;
@@ -19,10 +20,10 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   files, stats, availableLanguages, isGeneratingSummary, 
-  projectSummary, onGenerateSummary, outputContent, outputFormat 
+  projectSummary, projectSpec, onGenerateSummary, outputContent, outputFormat 
 }) => {
+  const [activeTab, setActiveTab] = useState<'summary' | 'spec'>('summary');
   
-  // Animação dos cards de métricas (Trail)
   const metrics = [
     { title: "Arquivos", value: files.length, icon: "📁", isMono: false },
     { title: "Volume", value: formatBytes(files.reduce((acc, f) => acc + (f.size_kb * 1024), 0)), icon: "⚖️", isMono: true },
@@ -37,11 +38,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     delay: 200,
   });
 
-  // Animação do conteúdo da IA
-  const summarySpring = useSpring({
-    opacity: projectSummary || isGeneratingSummary ? 1 : 0.7,
-    transform: projectSummary || isGeneratingSummary ? 'scale(1)' : 'scale(0.98)',
-    config: config.wobbly
+  const contentSpring = useSpring({
+    opacity: (activeTab === 'summary' ? projectSummary : projectSpec) || isGeneratingSummary ? 1 : 0.7,
+    transform: (activeTab === 'summary' ? projectSummary : projectSpec) || isGeneratingSummary ? 'scale(1)' : 'scale(0.98)',
+    config: config.stiff
   });
 
   return (
@@ -52,12 +52,11 @@ const Dashboard: React.FC<DashboardProps> = ({
              <span className="w-1.5 h-4 bg-indigo-600 rounded-full"></span>
              Métricas
            </h3>
-           {!projectSummary && !isGeneratingSummary && (
-             <button onClick={onGenerateSummary} className="text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full transition-all bg-indigo-500/5 hover:bg-indigo-500/20 active:scale-95">⚡ Raio-X</button>
+           {(!projectSummary && !projectSpec) && !isGeneratingSummary && (
+             <button onClick={onGenerateSummary} className="text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full transition-all bg-indigo-500/5 hover:bg-indigo-500/20 active:scale-95">⚡ Iniciar Análise SDD</button>
            )}
         </div>
 
-        {/* Grid ajustado para 2 colunas para caber no painel lateral */}
         <div className="grid grid-cols-2 gap-3">
            {trail.map((style, index) => (
              <animated.div key={index} style={style}>
@@ -66,24 +65,31 @@ const Dashboard: React.FC<DashboardProps> = ({
            ))}
         </div>
 
-        <animated.div style={summarySpring} className={`bg-indigo-950/10 border ${isGeneratingSummary ? 'border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.2)]' : 'border-indigo-500/20'} rounded-2xl p-6 min-h-[120px] transition-colors duration-500`}>
-          {!projectSummary && !isGeneratingSummary ? (
+        <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+           <button onClick={() => setActiveTab('summary')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${activeTab === 'summary' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>Resumo</button>
+           <button onClick={() => setActiveTab('spec')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${activeTab === 'spec' ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/30' : 'text-slate-500 hover:text-slate-300'}`}>Blueprint SDD</button>
+        </div>
+
+        <animated.div style={contentSpring} className={`bg-slate-900/50 border ${isGeneratingSummary ? 'border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.2)]' : activeTab === 'spec' ? 'border-emerald-500/20' : 'border-indigo-500/20'} rounded-2xl p-6 min-h-[120px] transition-colors duration-500`}>
+          {!(activeTab === 'summary' ? projectSummary : projectSpec) && !isGeneratingSummary ? (
              <div className="flex flex-col items-center justify-center text-center space-y-3 py-4 opacity-50">
                 <div className="text-2xl grayscale">🧠</div>
-                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Resumo Pendente</p>
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Aguardando geração de specs</p>
              </div>
           ) : isGeneratingSummary ? (
              <div className="flex flex-col items-center justify-center space-y-3 py-4">
                 <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Pensando...</p>
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Construindo Blueprint...</p>
              </div>
           ) : (
-             <div className="prose prose-invert prose-indigo max-w-none text-xs leading-relaxed">
+             <div className="prose prose-invert prose-slate max-w-none text-xs leading-relaxed">
                 <div className="flex items-center justify-between mb-4">
-                   <h4 className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em]">Insights Raio-X</h4>
-                   <button onClick={onGenerateSummary} className="text-[8px] font-black text-slate-600 hover:text-indigo-400 uppercase transition-colors">🔄</button>
+                   <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${activeTab === 'spec' ? 'text-emerald-400' : 'text-indigo-400'}`}>
+                     {activeTab === 'spec' ? 'Técnico: Especificação do Sistema' : 'Executivo: Visão Geral'}
+                   </h4>
+                   <button onClick={onGenerateSummary} className="text-[8px] font-black text-slate-600 hover:text-indigo-400 uppercase transition-colors" title="Regerar">🔄</button>
                 </div>
-                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(projectSummary) as string) }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse((activeTab === 'summary' ? projectSummary : projectSpec) || '') as string) }} />
              </div>
           )}
         </animated.div>

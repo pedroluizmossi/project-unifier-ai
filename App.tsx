@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ProcessorStatus, FileInfo, OutputFormat, AppMode, ProjectSession, ChatMessage, ChatSession } from './types';
 import { collectFileHandles, processFile, processFileList, generateOutput, calculateTokens } from './lib/utils';
 import { DEFAULT_IGNORE } from './constants';
-import { performProjectAnalysis } from './services/geminiService';
+import { performProjectAnalysis, generateProjectBlueprint } from './services/geminiService';
 import { saveSession, getSessions, deleteSession } from './lib/storage';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [langFilter, setLangFilter] = useState('all');
 
   const [projectSummary, setProjectSummary] = useState('');
+  const [projectSpec, setProjectSpec] = useState(''); // Estado para o Blueprint
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
   // Chat Multi-Session State
@@ -45,13 +46,11 @@ const App: React.FC = () => {
     refreshSessions();
   }, []);
 
-  // Sync active chat history to savedChats list whenever history updates
+  // Sync active chat history to savedChats list
   useEffect(() => {
     if (chatHistory.length > 0) {
       setSavedChats(prev => {
         const existingIndex = prev.findIndex(c => c.id === activeChatId);
-        
-        // Generate a title from the first user message if possible
         const firstUserMsg = chatHistory.find(m => m.role === 'user');
         const title = firstUserMsg 
           ? (firstUserMsg.text.slice(0, 30) + (firstUserMsg.text.length > 30 ? '...' : '')) 
@@ -84,14 +83,15 @@ const App: React.FC = () => {
         name: directoryName,
         files,
         summary: projectSummary,
-        chats: savedChats, // Save all chats
+        specification: projectSpec, // Salvando o Blueprint
+        chats: savedChats,
         lastUpdated: Date.now(),
         outputFormat
       };
       if (!activeSessionId) setActiveSessionId(session.id);
       saveSession(session).then(refreshSessions);
     }
-  }, [files, projectSummary, savedChats, outputFormat, directoryName]);
+  }, [files, projectSummary, projectSpec, savedChats, outputFormat, directoryName]);
 
   const refreshSessions = async () => {
     const list = await getSessions();
@@ -103,30 +103,15 @@ const App: React.FC = () => {
     setDirectoryName(session.name);
     setFiles(session.files);
     setProjectSummary(session.summary);
+    setProjectSpec(session.specification || '');
     setOutputFormat(session.outputFormat || 'markdown');
     
-    // Logic to handle Chat Migration or Loading
     if (session.chats && session.chats.length > 0) {
       setSavedChats(session.chats);
-      // Load the most recent chat
       const mostRecent = session.chats[0];
       setActiveChatId(mostRecent.id);
       setChatHistory(mostRecent.messages);
-    } else if (session.chatHistory && session.chatHistory.length > 0) {
-      // Migrate legacy single history to new format
-      const legacyId = crypto.randomUUID();
-      const legacyChat: ChatSession = {
-        id: legacyId,
-        title: 'Histórico Recuperado',
-        messages: session.chatHistory,
-        createdAt: session.lastUpdated,
-        updatedAt: session.lastUpdated
-      };
-      setSavedChats([legacyChat]);
-      setActiveChatId(legacyId);
-      setChatHistory(session.chatHistory);
     } else {
-      // New clean state
       handleNewChatInternal();
     }
 
@@ -138,6 +123,7 @@ const App: React.FC = () => {
     setDirectoryName(null);
     setFiles([]);
     setProjectSummary('');
+    setProjectSpec('');
     handleNewChatInternal();
     setIsContextOpen(true);
   };
@@ -146,7 +132,6 @@ const App: React.FC = () => {
     const newId = crypto.randomUUID();
     setActiveChatId(newId);
     setChatHistory([]);
-    // We don't add to savedChats yet; it adds automatically when user types (useEffect)
   };
 
   const handleSelectChat = (chatId: string) => {
@@ -207,6 +192,7 @@ const App: React.FC = () => {
         setDirectoryName(name);
         setFiles(results.filter((f): f is FileInfo => f !== null));
         setProjectSummary('');
+        setProjectSpec('');
         handleNewChatInternal();
         setActiveSessionId(null); 
       } catch (err: any) {
@@ -223,26 +209,32 @@ const App: React.FC = () => {
     const results = await processFileList(fileList, DEFAULT_IGNORE, 500);
     setFiles(results);
     setProjectSummary('');
+    setProjectSpec('');
     handleNewChatInternal();
     setIsProcessing(false);
     e.target.value = '';
   };
 
-  const generateProjectSummary = async () => {
+  const generateProjectSummaryAndSpec = async () => {
     if (!outputContent) return;
     setIsGeneratingSummary(true);
     try {
       const saved = localStorage.getItem('gemini_config_v2');
       const config = saved ? JSON.parse(saved) : undefined;
-      const prompt = "Faça um Raio-X profundo: 1. Stack, 2. Arquitetura, 3. Fluxos. Use Gemini 3.";
-      const result = await performProjectAnalysis(outputContent, prompt, undefined, undefined, config);
-      setProjectSummary(result);
+      
+      // Gera Blueprint técnico (Spec) e Resumo executivo em paralelo ou sequencial
+      const [summary, blueprint] = await Promise.all([
+         performProjectAnalysis(outputContent, "Gere um resumo executivo de 3 parágrafos sobre este projeto.", undefined, undefined, config),
+         generateProjectBlueprint(outputContent, config)
+      ]);
+
+      setProjectSummary(summary);
+      setProjectSpec(blueprint);
     } catch (err: any) {
       setProjectSummary(`⚠️ Erro: ${err.message}`);
     } finally { setIsGeneratingSummary(false); }
   };
 
-  // Animação do Painel Direito (Contexto)
   const contextPanelSpring = useSpring({
     width: isContextOpen ? 500 : 0,
     opacity: isContextOpen ? 1 : 0,
@@ -253,7 +245,6 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
       <input type="file" ref={fileInputRef} onChange={handleLegacyFileChange} className="hidden" {...({ webkitdirectory: "", directory: "" } as any)} />
       
-      {/* 1. Sidebar (Esquerda) */}
       <Sidebar 
         appMode={appMode} setAppMode={setAppMode} isProcessing={isProcessing}
         onSelectDirectory={handleSelectDirectory} outputFormat={outputFormat}
@@ -263,17 +254,15 @@ const App: React.FC = () => {
         onDeleteSession={handleDeleteSession} onNewProject={handleNewProject}
       />
 
-      {/* 2. Área Central (Chat) - Agora é o foco principal */}
       <div className="flex-1 min-w-0 bg-slate-900 flex flex-col relative z-0">
         <AIAnalysisPanel 
           context={outputContent} 
+          projectSpec={projectSpec} // Injetando o blueprint ativo
           diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
           history={chatHistory}
           onUpdateHistory={setChatHistory}
           isContextOpen={isContextOpen}
           toggleContext={() => setIsContextOpen(!isContextOpen)}
-          
-          // Novos props para gestão de chats
           savedChats={savedChats}
           activeChatId={activeChatId}
           onNewChat={handleNewChatInternal}
@@ -281,7 +270,6 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* 3. Painel Direito (Contexto/Dashboard) - Colapsável */}
       <animated.div style={contextPanelSpring} className="h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden shadow-2xl relative z-10">
         <div className="w-[500px] h-full flex flex-col">
           <Header 
@@ -303,7 +291,8 @@ const App: React.FC = () => {
                 <Dashboard 
                   files={files} stats={stats} availableLanguages={availableLanguages}
                   isGeneratingSummary={isGeneratingSummary} projectSummary={projectSummary}
-                  onGenerateSummary={generateProjectSummary} outputContent={outputContent} outputFormat={outputFormat}
+                  projectSpec={projectSpec} // Novo prop para Dashboard
+                  onGenerateSummary={generateProjectSummaryAndSpec} outputContent={outputContent} outputFormat={outputFormat}
                 />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center opacity-50 space-y-4">

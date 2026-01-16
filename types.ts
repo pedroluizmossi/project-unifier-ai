@@ -18,6 +18,12 @@ export type FileInfo = {
   selected?: boolean;
 };
 
+export interface Attachment {
+  name: string;
+  mimeType: string;
+  data: string; // base64 string
+}
+
 export interface ProcessorStatus {
   text: number;
   binary: number;
@@ -38,6 +44,7 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  attachments?: Attachment[];
 }
 
 export interface ChatSession {
@@ -53,13 +60,8 @@ export interface ProjectSession {
   name: string;
   files: FileInfo[];
   summary: string;
-  
-  // Legacy support (para migração)
-  chatHistory?: ChatMessage[];
-  
-  // New support
+  specification?: string;
   chats: ChatSession[];
-  
   lastUpdated: number;
   outputFormat: OutputFormat;
 }

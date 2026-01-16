@@ -1,54 +1,73 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { GeminiConfig } from "../types";
+import { GeminiConfig, Attachment } from "../types";
 
 export const performProjectAnalysis = async (
   projectContext: string,
   userPrompt: string,
   onStream?: (chunk: string) => void,
   diffContext?: string,
-  userConfig?: GeminiConfig
+  userConfig?: GeminiConfig,
+  projectSpec?: string,
+  attachments: Attachment[] = []
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const modelName = userConfig?.model || 'gemini-3-pro-preview';
   const useThinking = userConfig?.useThinking !== false;
-
-  // Orçamento de tokens para pensamento (Thinking Budget)
-  // Gemini 3 Pro suporta até 32768, Flash até 24576.
   const budget = modelName === 'gemini-3-pro-preview' ? 32768 : 24576;
 
-  const fullPrompt = `
-    Você é um Arquiteto de Software Sênior e Revisor de Código Elite.
+  const systemPrompt = `
+    Você é um Arquiteto de Software Sênior e Revisor de Código Elite operando em modo Spec-Driven Development.
     
-    CONTEXTO DO PROJETO:
+    ${projectSpec ? `BLUEPRINT TÉCNICO DO PROJETO (REGRAS DE OURO):
+    ---
+    ${projectSpec}
+    ---` : ''}
+
+    CONTEXTO DO CÓDIGO FONTE DO PROJETO:
     ---
     ${projectContext}
     ---
     
     ${diffContext ? `MUDANÇAS PROPOSTAS (DIFF):\n---\n${diffContext}\n---` : ''}
     
-    TAREFA:
-    ${userPrompt}
-    
-    DIRETRIZES:
-    - Analise o contexto profundamente.
-    - Seja técnico, preciso e identifique riscos arquiteturais ou de segurança.
+    INSTRUÇÕES:
+    1. Respeite estritamente o Blueprint Técnico acima.
+    2. Se a tarefa violar a arquitetura definida, alerte o usuário antes de prosseguir.
+    3. Analise também quaisquer arquivos de apoio (anexos) fornecidos nesta mensagem.
+    4. Seja técnico, preciso e mantenha a consistência com o estilo de código detectado.
   `;
 
   const config: any = {
-    temperature: 1.0,
+    temperature: 0.7,
   };
 
   if (useThinking) {
     config.thinkingConfig = { thinkingBudget: budget };
   }
 
+  // Added explicit type to parts array to allow mixing text and inlineData parts correctly for the Gemini API
+  const parts: any[] = [
+    { text: systemPrompt },
+    { text: `TAREFA DO USUÁRIO: ${userPrompt}` }
+  ];
+
+  // Adicionar anexos se existirem
+  attachments.forEach(att => {
+    parts.push({
+      inlineData: {
+        data: att.data,
+        mimeType: att.mimeType
+      }
+    });
+  });
+
   try {
     if (onStream) {
       const responseStream = await ai.models.generateContentStream({
         model: modelName,
-        contents: [{ parts: [{ text: fullPrompt }] }],
+        contents: [{ parts }],
         config
       });
 
@@ -64,13 +83,49 @@ export const performProjectAnalysis = async (
     } else {
       const response = await ai.models.generateContent({
         model: modelName,
-        contents: [{ parts: [{ text: fullPrompt }] }],
+        contents: [{ parts }],
         config
       });
       return response.text || "O modelo não retornou conteúdo.";
     }
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    throw new Error(error.message || "Erro desconhecido na comunicação com o Gemini.");
+    throw new Error(error.message || "Erro na comunicação com o Gemini.");
+  }
+};
+
+export const generateProjectBlueprint = async (
+  projectContext: string,
+  userConfig?: GeminiConfig
+): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const modelName = 'gemini-3-pro-preview';
+  
+  const prompt = `
+    Analise o código fonte fornecido e gere um BLUEPRINT TÉCNICO (Spec) estruturado.
+    Este documento servirá de guia para futuras manutenções por IA.
+    
+    FORMATO DESEJADO:
+    1. **Domain Logic**: Quais as entidades principais e regras de negócio?
+    2. **Data Flow**: Como os dados transitam entre componentes?
+    3. **Tech Stack & Invariants**: Tecnologias chaves e padrões que NUNCA devem ser quebrados (ex: SOLID, Clean Arch).
+    4. **Critical Paths**: Áreas sensíveis (Segurança, Performance).
+
+    CÓDIGO:
+    ${projectContext}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [{ parts: [{ text: prompt }] }],
+      config: { 
+        temperature: 0.4,
+        thinkingConfig: { thinkingBudget: 32768 } 
+      }
+    });
+    return response.text || "Falha ao gerar blueprint.";
+  } catch (error: any) {
+    throw new Error("Erro ao gerar Blueprint: " + error.message);
   }
 };

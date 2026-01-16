@@ -1,5 +1,5 @@
 
-import { FileInfo, OutputFormat } from '../types';
+import { FileInfo, OutputFormat, Attachment } from '../types';
 
 export const calculateTokens = (text: string) => Math.ceil(text.length / 4);
 
@@ -9,6 +9,18 @@ export const formatBytes = (bytes: number) => {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+export const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const base64String = (reader.result as string).split(',')[1];
+      resolve(base64String);
+    };
+    reader.onerror = error => reject(error);
+  });
 };
 
 export const collectFileHandles = async (
@@ -54,7 +66,7 @@ export const processFile = async (
         content,
         line_count: content.split('\n').length,
         language: path.split('.').pop() || 'text',
-        selected: true // Por padrão, arquivos de texto são selecionados
+        selected: true 
       };
     } catch {
       return { path, size_kb: file.size / 1024, type: 'binary_file', selected: false };
@@ -88,7 +100,6 @@ export const generateOutput = (
   files: FileInfo[], 
   format: OutputFormat
 ): string => {
-  // Filtramos apenas os arquivos selecionados para gerar o output
   const selectedFiles = files.filter(f => f.selected && f.type === 'text_file');
 
   if (format === 'markdown') {
