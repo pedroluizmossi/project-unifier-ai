@@ -2,9 +2,8 @@
 import React, { useState } from 'react';
 import { FileInfo, OutputFormat } from '../types';
 import { formatBytes } from '../lib/utils';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
 import { useTrail, animated, useSpring, config } from 'react-spring';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface DashboardProps {
   files: FileInfo[];
@@ -92,14 +91,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Construindo Blueprint...</p>
              </div>
           ) : (
-             <div className="prose prose-invert prose-slate max-w-none text-xs leading-relaxed">
+             <div className="text-xs leading-relaxed">
                 <div className="flex items-center justify-between mb-4">
                    <h4 className={`text-[9px] font-black uppercase tracking-[0.3em] ${activeTab === 'spec' ? 'text-emerald-400' : 'text-indigo-400'}`}>
                      {activeTab === 'spec' ? 'Técnico: Especificação do Sistema' : 'Executivo: Visão Geral'}
                    </h4>
                    <button onClick={onGenerateSummary} className="text-[8px] font-black text-slate-600 hover:text-indigo-400 uppercase transition-colors" title="Regerar">🔄</button>
                 </div>
-                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse((activeTab === 'summary' ? projectSummary : projectSpec) || '') as string) }} />
+                <MarkdownRenderer 
+                  content={(activeTab === 'summary' ? projectSummary : projectSpec) || ''} 
+                />
              </div>
           )}
         </animated.div>
