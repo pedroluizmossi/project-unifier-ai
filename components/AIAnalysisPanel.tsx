@@ -95,11 +95,21 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
               </button>
             )}
-            <div className="flex items-center gap-2 px-3 py-1 bg-[#1e1e24] rounded-full border border-white/5 shadow-sm">
-              <span className="text-xs font-medium text-slate-300">
-                {geminiConfig.model.includes('flash') ? 'Gemini 3 Flash' : 'Gemini 3 Pro'}
-              </span>
-              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${geminiConfig.useThinking ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1 bg-[#1e1e24] rounded-full border border-white/5 shadow-sm">
+                <span className="text-xs font-medium text-slate-300">
+                  {geminiConfig.model.includes('flash') ? 'Gemini 3 Flash' : 'Gemini 3 Pro'}
+                </span>
+                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${geminiConfig.useThinking ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
+              </div>
+              
+              {/* DIFF Context Indicator */}
+              {props.diffContext && props.diffContext.trim().length > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/30 shadow-sm animate-in fade-in slide-in-from-left-2">
+                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Contexto Diff Ativo</span>
+                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></div>
+                </div>
+              )}
             </div>
           </div>
           

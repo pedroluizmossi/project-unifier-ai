@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { AppMode, OutputFormat, ProcessorStatus, FileInfo, ProjectSession, ChatSession } from '../types';
 import { useTransition, animated, config } from 'react-spring';
 
@@ -34,6 +34,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   savedChats, activeChatId, onNewChat, onSelectChat
 }) => {
 
+  const diffFileInputRef = useRef<HTMLInputElement>(null);
+
   const chatTransitions = useTransition(savedChats, {
     from: { opacity: 0, transform: 'translateX(-10px)', height: 0 },
     enter: { opacity: 1, transform: 'translateX(0px)', height: 44 },
@@ -41,6 +43,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     keys: item => item.id,
     config: config.stiff
   });
+
+  const handleDiffFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setDiffContent(content);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="flex flex-col h-full p-4 space-y-6">
@@ -58,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Mode Switcher */}
       <div className="bg-[#1e1e24] p-1 rounded-lg flex border border-white/5">
          <button onClick={() => setAppMode('project')} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${appMode === 'project' ? 'bg-[#2d2e35] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Workspace</button>
-         <button onClick={() => setAppMode('mr_analysis')} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${appMode === 'mr_analysis' ? 'bg-[#2d2e35] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Diff</button>
+         <button onClick={() => setAppMode('mr_analysis')} className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${appMode === 'mr_analysis' ? 'bg-[#2d2e35] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>Analise Diff</button>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 space-y-6 overflow-y-auto scrollbar-hide pr-1">
@@ -155,13 +170,48 @@ const Sidebar: React.FC<SidebarProps> = ({
           </>
         ) : (
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">Git Diff Analysis</h3>
-            <textarea 
-              value={diffContent}
-              onChange={(e) => setDiffContent(e.target.value)}
-              placeholder="Cole seu git diff aqui para análise focada..."
-              className="w-full h-64 bg-[#1e1e24] border border-white/5 rounded-2xl p-4 text-[10px] font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none scrollbar-hide resize-none"
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Git Diff / Patch</h3>
+              <div className={`w-2 h-2 rounded-full ${diffContent.trim() ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
+            </div>
+
+            <input 
+              type="file" 
+              ref={diffFileInputRef} 
+              className="hidden" 
+              accept=".diff,.patch,.txt" 
+              onChange={handleDiffFileUpload}
             />
+
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => diffFileInputRef.current?.click()}
+                className="w-full py-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+              >
+                <span>📎</span> Importar Arquivo .diff
+              </button>
+              
+              <div className="relative">
+                <textarea 
+                  value={diffContent}
+                  onChange={(e) => setDiffContent(e.target.value)}
+                  placeholder="Cole as mudanças (git diff) aqui para que a IA foque no que mudou..."
+                  className="w-full h-80 bg-[#1e1e24] border border-white/5 rounded-2xl p-4 text-[10px] font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none scrollbar-hide resize-none leading-relaxed"
+                />
+                {diffContent && (
+                  <button 
+                    onClick={() => setDiffContent('')}
+                    className="absolute top-3 right-3 p-1.5 bg-black/40 hover:bg-black/60 text-slate-500 hover:text-red-400 rounded-lg transition-all"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[9px] text-slate-600 px-2 leading-relaxed">
+              * Ao ativar o modo DIFF, as análises da IA priorizarão as linhas alteradas, identificando bugs e inconsistências no código novo.
+            </p>
           </div>
         )}
       </div>
@@ -170,7 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
          <div className="flex items-center gap-2 px-2">
            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">System Operational</span>
+           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">IA Operacional</span>
          </div>
       </div>
     </div>
