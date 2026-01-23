@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { ProjectSession, FileInfo, OutputFormat, ChatSession, ChatMessage } from '../types';
-import { getSessions, saveSession, deleteSession } from '../lib/storage';
+import { ProjectSession, FileInfo, OutputFormat, ChatSession, ChatMessage, SavedResponse } from '../types';
+import { getSessions, saveSession, deleteSession, getFavorites, saveFavorite, deleteFavorite } from '../lib/storage';
 import { collectFileHandles, processFile, processFileList, generateOutput } from '../lib/utils';
 import { DEFAULT_IGNORE } from '../constants';
 import { performProjectAnalysis, generateProjectBlueprint } from '../services/geminiService';
@@ -16,6 +17,9 @@ export const useProjectManager = () => {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Favorites state
+  const [favorites, setFavorites] = useState<SavedResponse[]>([]);
+
   // Chat State
   const [savedChats, setSavedChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>(crypto.randomUUID());
@@ -23,11 +27,19 @@ export const useProjectManager = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { refreshSessions(); }, []);
+  useEffect(() => { 
+    refreshSessions(); 
+    refreshFavorites();
+  }, []);
 
   const refreshSessions = async () => {
     const list = await getSessions();
     setSessions(list);
+  };
+
+  const refreshFavorites = async () => {
+    const list = await getFavorites();
+    setFavorites(list);
   };
 
   useEffect(() => {
@@ -118,7 +130,6 @@ export const useProjectManager = () => {
       const handle = await (window as any).showDirectoryPicker();
       setIsProcessing(true);
       
-      // Limpa estados de análise anterior ANTES de carregar novos arquivos
       setActiveSessionId(null);
       setProjectSummary('');
       setProjectSpec('');
@@ -173,9 +184,30 @@ export const useProjectManager = () => {
     } finally { setIsGeneratingSummary(false); }
   };
 
+  const toggleFavorite = async (content: string, title?: string) => {
+    const existing = favorites.find(f => f.content === content);
+    if (existing) {
+      await deleteFavorite(existing.id);
+    } else {
+      await saveFavorite({
+        id: crypto.randomUUID(),
+        title: title || 'Resposta Salva',
+        content,
+        timestamp: Date.now()
+      });
+    }
+    refreshFavorites();
+  };
+
+  const removeFavorite = async (id: string) => {
+    await deleteFavorite(id);
+    refreshFavorites();
+  };
+
   return {
     activeSessionId, sessions, directoryName, files, setFiles, outputFormat, setOutputFormat,
     projectSummary, projectSpec, isGeneratingSummary, isProcessing, savedChats, activeChatId, chatHistory, setChatHistory,
+    favorites, toggleFavorite, removeFavorite,
     loadSession, handleNewProject, handleNewChat, handleSelectChat, handleDelete, handleSelectDirectory, handleFilesFallback, generateSummary, fileInputRef
   };
 };

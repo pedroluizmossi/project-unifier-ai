@@ -55,6 +55,13 @@ export interface ChatSession {
   updatedAt: number;
 }
 
+export interface SavedResponse {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: number;
+}
+
 export interface ProjectSession {
   id: string;
   name: string;
@@ -62,6 +69,7 @@ export interface ProjectSession {
   summary: string;
   specification?: string;
   chats: ChatSession[];
+  favorites?: SavedResponse[];
   lastUpdated: number;
   outputFormat: OutputFormat;
 }

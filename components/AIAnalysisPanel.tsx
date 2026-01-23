@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, ChatSession, Attachment } from '../types';
+import { ChatMessage, ChatSession, Attachment, SavedResponse } from '../types';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { fileToBase64 } from '../lib/utils';
 import { marked } from 'marked';
@@ -8,6 +8,7 @@ import DOMPurify from 'dompurify';
 import { useTransition, config } from 'react-spring';
 import ChatMessageItem from './ChatMessageItem';
 import TemplateSelectorModal from './TemplateSelectorModal';
+import SavedFavoritesModal from './SavedFavoritesModal';
 
 interface AIAnalysisPanelProps {
   context: string;
@@ -23,6 +24,9 @@ interface AIAnalysisPanelProps {
   onSelectChat: (id: string) => void;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
+  favorites: SavedResponse[];
+  onToggleFavorite: (content: string) => void;
+  onRemoveFavorite: (id: string) => void;
 }
 
 const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
@@ -33,6 +37,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
 
   const [showSettings, setShowSettings] = useState(false);
   const [isTemplateModalOpen, setTemplateModalOpen] = useState(false);
+  const [isFavoritesModalOpen, setFavoritesModalOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -85,6 +90,13 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
         projectContext={props.context}
       />
 
+      <SavedFavoritesModal
+        isOpen={isFavoritesModalOpen}
+        onClose={() => setFavoritesModalOpen(false)}
+        favorites={props.favorites}
+        onRemove={props.onRemoveFavorite}
+      />
+
       <div className="flex-1 flex flex-col min-w-0 relative">
         
         {/* Top Floating Header */}
@@ -114,6 +126,18 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
           </div>
           
           <div className="flex items-center gap-2 pointer-events-auto">
+             <button 
+               onClick={() => setFavoritesModalOpen(true)} 
+               className="p-2 text-slate-400 hover:text-amber-400 hover:bg-white/5 rounded-full transition-colors relative"
+               title="Biblioteca de Favoritos"
+             >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+                {props.favorites.length > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                )}
+             </button>
              <button onClick={props.toggleContext} className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border transition-all ${props.isContextOpen ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-[#1e1e24] text-slate-500 border-white/5 hover:text-slate-200'}`}>
                 {props.isContextOpen ? 'Fechar Painel' : 'Dashboard'}
              </button>
@@ -174,7 +198,13 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
           ) : (
             <div className="space-y-4">
               {msgTransitions((style, msg) => (
-                <ChatMessageItem key={msg.timestamp} message={msg} style={style} />
+                <ChatMessageItem 
+                  key={msg.timestamp} 
+                  message={msg} 
+                  style={style} 
+                  onFavorite={props.onToggleFavorite}
+                  isFavorite={props.favorites.some(f => f.content === msg.text)}
+                />
               ))}
               
               {(isAnalyzing || currentResponse) && (

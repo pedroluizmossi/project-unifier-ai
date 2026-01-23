@@ -9,6 +9,10 @@ interface MarkdownRendererProps {
   className?: string;
 }
 
+// Utilitários para Base64 seguros com UTF-8
+const utf8ToB64 = (str: string) => btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+const b64ToUtf8 = (str: string) => decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = "" }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [fullscreenCode, setFullscreenCode] = useState<string | null>(null);
@@ -48,11 +52,15 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
     if (copyBtn) {
       const code = copyBtn.getAttribute('data-code');
       if (code) {
-        navigator.clipboard.writeText(atob(code)).then(() => {
-          const originalText = copyBtn.innerHTML;
-          copyBtn.innerHTML = '<span class="text-emerald-500 font-bold">Copiado!</span>';
-          setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
-        });
+        try {
+          navigator.clipboard.writeText(b64ToUtf8(code)).then(() => {
+            const originalText = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<span class="text-emerald-500 font-bold">Copiado!</span>';
+            setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
+          });
+        } catch (err) {
+          console.error("Erro ao decodificar código para cópia:", err);
+        }
       }
       return;
     }
@@ -79,7 +87,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
     if (expandBtn) {
       const code = expandBtn.getAttribute('data-mermaid-code');
       if (code) {
-        setFullscreenCode(atob(code));
+        try {
+          setFullscreenCode(b64ToUtf8(code));
+        } catch (err) {
+          console.error("Erro ao decodificar código Mermaid:", err);
+        }
       }
     }
   };
@@ -98,7 +110,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
     }
 
     const isMermaid = lang === 'mermaid';
-    const base64Code = btoa(unescape(encodeURIComponent(code)));
+    const base64Code = utf8ToB64(code);
 
     if (isMermaid) {
       return `

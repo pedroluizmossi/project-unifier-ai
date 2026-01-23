@@ -111,6 +111,7 @@ const App: React.FC = () => {
           savedChats={pm.savedChats} activeChatId={pm.activeChatId}
           onNewChat={pm.handleNewChat} onSelectChat={pm.handleSelectChat}
           isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          favorites={pm.favorites} onToggleFavorite={pm.toggleFavorite} onRemoveFavorite={pm.removeFavorite}
         />
       </div>
 
