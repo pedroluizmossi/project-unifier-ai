@@ -1,10 +1,10 @@
 
 import { ProjectSession, SavedResponse } from '../types';
 
-const DB_NAME = 'ProjectUnifierDB';
+const DB_NAME = 'ProjectUnifierDB_v2';
 const STORE_NAME = 'sessions';
 const FAVORITES_STORE = 'favorites';
-const DB_VERSION = 2; // Incremented version
+const DB_VERSION = 1;
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -28,9 +28,9 @@ export const saveSession = async (session: ProjectSession) => {
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
-    store.put(session);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    const request = store.put(session);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
   });
 };
 
@@ -50,9 +50,9 @@ export const deleteSession = async (id: string) => {
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
-    store.delete(id);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
   });
 };
 
@@ -61,9 +61,9 @@ export const saveFavorite = async (fav: SavedResponse) => {
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(FAVORITES_STORE, 'readwrite');
     const store = transaction.objectStore(FAVORITES_STORE);
-    store.put(fav);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    const request = store.put(fav);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
   });
 };
 
@@ -83,8 +83,8 @@ export const deleteFavorite = async (id: string) => {
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(FAVORITES_STORE, 'readwrite');
     const store = transaction.objectStore(FAVORITES_STORE);
-    store.delete(id);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
   });
 };

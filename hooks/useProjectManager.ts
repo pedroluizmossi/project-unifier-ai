@@ -6,8 +6,10 @@ import { collectFileHandles, processFile, processFileList, generateOutput } from
 import { DEFAULT_IGNORE } from '../constants';
 import { performProjectAnalysis, generateProjectBlueprint } from '../services/geminiService';
 
+const ACTIVE_SESSION_KEY = 'unifier_active_session_id';
+
 export const useProjectManager = () => {
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => localStorage.getItem(ACTIVE_SESSION_KEY));
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [directoryName, setDirectoryName] = useState<string | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
@@ -16,6 +18,10 @@ export const useProjectManager = () => {
   const [projectSpec, setProjectSpec] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Fix: Added missing fileInputRef to handle file picker fallback logic
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Favorites state
   const [favorites, setFavorites] = useState<SavedResponse[]>([]);
@@ -25,16 +31,28 @@ export const useProjectManager = () => {
   const [activeChatId, setActiveChatId] = useState<string>(crypto.randomUUID());
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+  // Carregamento Inicial
   useEffect(() => { 
-    refreshSessions(); 
-    refreshFavorites();
+    const init = async () => {
+      await refreshFavorites();
+      const list = await refreshSessions();
+      
+      // Se houver um ID salvo, tenta carregar
+      if (activeSessionId) {
+        const lastSession = list.find(s => s.id === activeSessionId);
+        if (lastSession) {
+          loadSession(lastSession);
+        }
+      }
+      isInitialMount.current = false;
+    };
+    init();
   }, []);
 
   const refreshSessions = async () => {
     const list = await getSessions();
     setSessions(list);
+    return list;
   };
 
   const refreshFavorites = async () => {
@@ -42,7 +60,19 @@ export const useProjectManager = () => {
     setFavorites(list);
   };
 
+  // Salvar ID ativo no localStorage
   useEffect(() => {
+    if (activeSessionId) {
+      localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+    } else {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    }
+  }, [activeSessionId]);
+
+  // Sincronizar Histórico com Chats Salvos
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
     if (chatHistory.length > 0) {
       setSavedChats(prev => {
         const idx = prev.findIndex(c => c.id === activeChatId);
@@ -54,31 +84,36 @@ export const useProjectManager = () => {
           createdAt: idx >= 0 ? prev[idx].createdAt : Date.now(),
           updatedAt: Date.now()
         };
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = updated;
-          return next;
-        }
-        return [updated, ...prev];
+        const next = idx >= 0 ? [...prev] : [updated, ...prev];
+        if (idx >= 0) next[idx] = updated;
+        return next;
       });
     }
   }, [chatHistory, activeChatId]);
 
+  // Persistência Automática da Sessão Inteira
   useEffect(() => {
-    if (directoryName && files.length > 0) {
-      const session: ProjectSession = {
-        id: activeSessionId || crypto.randomUUID(),
-        name: directoryName,
-        files,
-        summary: projectSummary,
-        specification: projectSpec,
-        chats: savedChats,
-        lastUpdated: Date.now(),
-        outputFormat
-      };
-      if (!activeSessionId) setActiveSessionId(session.id);
+    if (isInitialMount.current || !directoryName || files.length === 0) return;
+
+    const session: ProjectSession = {
+      id: activeSessionId || crypto.randomUUID(),
+      name: directoryName,
+      files,
+      summary: projectSummary,
+      specification: projectSpec,
+      chats: savedChats,
+      lastUpdated: Date.now(),
+      outputFormat
+    };
+
+    if (!activeSessionId) setActiveSessionId(session.id);
+    
+    // Debounce manual simples para evitar escritas excessivas no DB
+    const timeout = setTimeout(() => {
       saveSession(session).then(refreshSessions);
-    }
+    }, 500);
+
+    return () => clearTimeout(timeout);
   }, [files, projectSummary, projectSpec, savedChats, outputFormat, directoryName]);
 
   const loadSession = (session: ProjectSession) => {
@@ -88,10 +123,12 @@ export const useProjectManager = () => {
     setProjectSummary(session.summary);
     setProjectSpec(session.specification || '');
     setOutputFormat(session.outputFormat || 'markdown');
+    
     if (session.chats?.length) {
       setSavedChats(session.chats);
-      setActiveChatId(session.chats[0].id);
-      setChatHistory(session.chats[0].messages);
+      const lastChat = session.chats[0];
+      setActiveChatId(lastChat.id);
+      setChatHistory(lastChat.messages);
     } else {
       handleNewChat();
     }
@@ -130,11 +167,8 @@ export const useProjectManager = () => {
       const handle = await (window as any).showDirectoryPicker();
       setIsProcessing(true);
       
-      setActiveSessionId(null);
-      setProjectSummary('');
-      setProjectSpec('');
-      setSavedChats([]);
-      handleNewChat();
+      // Limpar estados para novo projeto
+      handleNewProject();
 
       const handles = await collectFileHandles(handle, DEFAULT_IGNORE);
       const results = await Promise.all(handles.map(h => processFile(h.handle, h.path, 500)));
@@ -196,12 +230,12 @@ export const useProjectManager = () => {
         timestamp: Date.now()
       });
     }
-    refreshFavorites();
+    await refreshFavorites();
   };
 
   const removeFavorite = async (id: string) => {
     await deleteFavorite(id);
-    refreshFavorites();
+    await refreshFavorites();
   };
 
   return {
