@@ -8,6 +8,8 @@
 
 Diferente de chats de IA convencionais, esta aplicação permite carregar diretórios inteiros, calcular tokens, filtrar arquivos irrelevantes e realizar análises arquiteturais profundas sem copiar e colar código manualmente.
 
+<img width="2496" height="1319" alt="image" src="https://github.com/user-attachments/assets/7164c8d9-35e8-4ac1-b871-000d4163ae43" />
+
 ## Funcionalidades Principais
 
 ### Integração com Gemini 3 Pro & Flash
