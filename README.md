@@ -1,65 +1,87 @@
 # Project Unifier AI
 
-O **Project Unifier AI** é uma ferramenta de engenharia de software projetada para transformar bases de código locais em contextos estruturados para análise por Grandes Modelos de Linguagem (LLMs), especificamente integrado com o Google Gemini 3 Pro.
+![Status](https://img.shields.io/badge/Status-Development-blue)
+![Stack](https://img.shields.io/badge/Stack-React_19_|_Vite_|_TypeScript-3178C6)
+![AI Model](https://img.shields.io/badge/AI-Gemini_3_Pro-8E44AD)
 
-A aplicação atua como uma ponte entre o ambiente de desenvolvimento local e a IA, permitindo revisões de código, auditorias de segurança e visualização de arquitetura sem a necessidade de copiar e colar arquivos manualmente.
+**Project Unifier AI** é uma ferramenta avançada de engenharia de software projetada para fazer a ponte entre seu ambiente de desenvolvimento local e o poder do **Google Gemini 3 Pro**. 
+
+Diferente de chats de IA convencionais, esta aplicação permite carregar diretórios inteiros, calcular tokens, filtrar arquivos irrelevantes e realizar análises arquiteturais profundas sem copiar e colar código manualmente.
 
 ## Funcionalidades Principais
 
-### 1. Gestão de Contexto e Arquivos
-- **Leitura de Diretório Local:** Utiliza a *File System Access API* para ler diretórios inteiros diretamente do navegador.
-- **Filtragem Inteligente:** Ignora automaticamente arquivos binários, grandes volumes de dados e padrões comuns (`node_modules`, `.git`, etc.) definidos em `constants.tsx`.
-- **Cálculo de Tokens:** Estimativa em tempo real do custo computacional do contexto selecionado.
-- **Suporte a Diff/Patch:** Modo dedicado para análise de Merge Requests (MRs) através da inserção de diffs do Git.
+### Integração com Gemini 3 Pro & Flash
+- **Thinking Mode:** Utiliza o budget de pensamento estendido (até 32k tokens) do Gemini 3 Pro para raciocínio complexo em arquitetura e segurança.
+- **Streaming em Tempo Real:** Feedback visual imediato enquanto a IA processa a resposta.
+- **Templates Adaptativos:** A IA analisa seu código e gera prompts customizados (Adaptive Templates) específicos para sua stack.
 
-### 2. Integração com Gemini 3 Pro
-- Utiliza o SDK `@google/genai` para comunicação direta com o modelo `gemini-3-pro-preview`.
-- **Streaming de Resposta:** Feedback visual em tempo real enquanto a análise é gerada.
-- **Budget de Pensamento (Thinking Config):** Configurado com budget de 32k tokens para raciocínio complexo em tarefas de arquitetura e segurança.
+### Gestão de Contexto Inteligente
+- **File System Access API:** Leitura direta de pastas locais (sem upload para servidor intermediário).
+- **Filtragem Automática:** Ignora `node_modules`, `.git`, binários e arquivos grandes automaticamente.
+- **Controle de Tokens:** Visualização em tempo real do consumo de tokens para otimizar o contexto enviado à LLM.
+- **Exportação:** Gere arquivos unificados em Markdown, JSON ou XML para documentação ou uso externo.
 
-### 3. Templates de Análise Automatizada
-O sistema possui prompts especializados pré-configurados:
-- **Merge Request Review:** Foca em mudanças incrementais, bugs e estilo.
-- **Security Guard (OWASP):** Varredura por vulnerabilidades conhecidas (SQLi, XSS, Secrets).
-- **Performance & Scalability:** Identificação de complexidade ciclomática e gargalos (Big O).
-- **Visualize Architecture:** Geração de diagramas Mermaid.js (Sequência, Classes) baseados no código.
-- **Technical Specification:** Geração de documentação técnica automática.
+### 🛠 Ferramentas de Engenharia
+- **Análise de Merge Request (Diff):** Modo dedicado para colar `git diff` e focar a análise apenas nas mudanças, detectando bugs regressivos.
+- **Visualização Arquitetural:** Renderização nativa de diagramas **Mermaid.js** (Flowcharts, Sequence, Class Diagrams) gerados pela IA.
+- **Templates Especializados:**
+  - **Security Guard:** Auditoria OWASP Top 10.
+  - **Performance Pro:** Detecção de complexidade Big O e gargalos.
+  - **Tech Writer:** Geração de documentação técnica padrão enterprise.
 
-### 4. Interface e Visualização
-- **Dashboard de Métricas:** Visualização de contagem de arquivos, tamanho total e linguagens detectadas.
-- **Renderização Markdown:** O output da IA é renderizado com suporte a sintaxe de código e diagramas.
-- **Exportação:** Capacidade de baixar o contexto unificado em formatos Markdown, JSON ou XML.
+### Persistência Local
+- **Sessões Salvas:** Projetos e históricos de chat são salvos via **IndexedDB** no navegador.
+- **Favoritos:** Salve insights valiosos para referência futura.
 
-## Stack Tecnológica
-
-- **Frontend:** React 19, TypeScript
-- **Estilização:** Tailwind CSS (com plugin Typography)
-- **IA/LLM:** Google GenAI SDK (`@google/genai`)
-- **Utilitários:** 
-  - `marked` & `dompurify` (Renderização segura de Markdown)
-  - `mermaid` (Diagramas via CDN)
-
-## Configuração e Instalação
+## Como Executar
 
 ### Pré-requisitos
-O projeto depende de uma chave de API do Google Gemini configurada no ambiente.
+- Node.js 18+
+- Uma chave de API do Google Gemini (obtenha em [Google AI Studio](https://aistudio.google.com/)).
 
-1. Obtenha uma chave em [Google AI Studio](https://aistudio.google.com/).
-2. A chave deve ser disponibilizada via variável de ambiente `process.env.API_KEY`.
+### Instalação
 
-### Executando o Projeto
-Como o projeto utiliza Módulos ES diretamente no navegador (via `importmap` no `index.html`), ele deve ser servido por um servidor estático ou ambiente de desenvolvimento compatível (como Vite ou StackBlitz).
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/project-unifier-ai.git
+   cd project-unifier-ai
+   ```
 
-Não é necessário um processo de build complexo (Webpack/Rollup) devido à estrutura moderna de imports via CDN (`esm.sh`).
+2. Instale as dependências:
+   ```bash
+   npm install
+   # ou
+   yarn install
+   ```
 
-## Estrutura do Projeto
+3. Configure as variáveis de ambiente:
+   Crie um arquivo `.env.local` na raiz do projeto:
+   ```env
+   GEMINI_API_KEY=sua_chave_api_aqui
+   ```
 
-- **App.tsx:** Componente principal, gerencia o estado global, seleção de arquivos e modos de aplicação.
-- **services/geminiService.ts:** Camada de abstração para a API do Google GenAI. Define modelos, temperatura e configurações de *thinking*.
-- **components/AIAnalysisPanel.tsx:** Interface do usuário para interação com a IA (chat e templates).
-- **lib/utils.ts:** Lógica auxiliar para manipulação de sistema de arquivos e formatação de dados.
-- **constants.tsx:** Definição dos templates de prompt e listas de ignorar arquivos.
+4. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
 
-## Considerações de Segurança
+5. Acesse `http://localhost:3000`.
 
-O processamento de arquivos ocorre localmente no navegador do usuário. O conteúdo dos arquivos é enviado para a API do Google Gemini apenas quando o usuário solicita explicitamente uma análise ("Deep Insight" ou "Gerar Raio-X").
+## Arquitetura do Projeto
+
+O projeto segue uma arquitetura moderna baseada em React 19 e Vite:
+
+*   **`services/geminiService.ts`**: Camada de abstração do SDK `@google/genai`. Gerencia a configuração de modelos, budgets de pensamento e construção de prompts do sistema.
+*   **`hooks/useProjectManager.ts`**: Gerencia o estado global da aplicação, interagindo com o `lib/storage.ts` (IndexedDB) para persistência de sessões e com o sistema de arquivos.
+*   **`components/MarkdownRenderer.tsx`**: Componente complexo responsável por renderizar o output da IA, incluindo *syntax highlighting* (Prism.js) e diagramas (Mermaid), além de sanitização de HTML.
+*   **`lib/utils.ts`**: Utilitários para processamento de arquivos, conversão Base64 e construção de árvores de diretórios.
+
+## Privacidade e Segurança
+
+*   **Processamento Local:** A leitura e filtragem dos arquivos ocorrem inteiramente no seu navegador.
+*   **Envio de Dados:** O conteúdo dos arquivos é enviado para a API do Google **apenas** quando você solicita uma análise (clica em enviar ou seleciona um template).
+*   **Sanitização:** Todas as respostas da IA passam pelo `DOMPurify` antes de serem renderizadas para prevenir ataques XSS.
+
+## 🤝 Contribuição
+
+Contribuições são bem-vindas! Sinta-se à vontade para abrir Issues ou Pull Requests para melhorar.
