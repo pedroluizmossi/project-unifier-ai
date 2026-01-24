@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
 import { useSpring, animated } from 'react-spring';
+import { OutputFormat } from './types';
 
 const App: React.FC = () => {
   const pm = useProjectManager();
@@ -52,19 +53,15 @@ const App: React.FC = () => {
     config: { tension: 210, friction: 20 }
   });
 
-  const sidebarSpring = useSpring({
-    width: isSidebarOpen ? 280 : 0,
-    opacity: isSidebarOpen ? 1 : 0,
-    transform: isSidebarOpen ? 'translateX(0%)' : 'translateX(-100%)',
-    config: { tension: 210, friction: 20 }
-  });
-
-  const handleDownload = () => {
-    const blob = new Blob([outputContent], { type: 'text/plain' });
+  const handleExport = (format: OutputFormat) => {
+    // Gera o conteúdo sob demanda baseada no formato solicitado, ignorando o estado visual atual
+    const contentToExport = generateOutput(pm.directoryName || 'Project', pm.files, format);
+    
+    const blob = new Blob([contentToExport], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const extension = pm.outputFormat === 'markdown' ? 'md' : pm.outputFormat;
+    const extension = format === 'markdown' ? 'md' : format;
     a.download = `${pm.directoryName || 'project'}_context.${extension}`;
     document.body.appendChild(a);
     a.click();
@@ -82,24 +79,21 @@ const App: React.FC = () => {
         {...({ webkitdirectory: "", directory: "" } as any)} 
       />
       
-      {/* Sidebar Esquerda */}
-      <animated.div style={sidebarSpring} className="flex-shrink-0 h-full overflow-hidden border-r border-slate-800/50 bg-[#13141c]">
-        <div className="w-[280px] h-full flex flex-col">
-          <Sidebar 
-            appMode={appMode} setAppMode={setAppMode} isProcessing={pm.isProcessing}
-            onSelectDirectory={pm.handleSelectDirectory} outputFormat={pm.outputFormat}
-            setOutputFormat={pm.setOutputFormat} files={pm.files} openFileExplorer={() => setIsModalOpen(true)}
-            stats={{...stats, text: stats.text}} directoryName={pm.directoryName} diffContent={diffContent} setDiffContent={setDiffContent}
-            sessions={pm.sessions} onSelectSession={pm.loadSession} activeSessionId={pm.activeSessionId}
-            onDeleteSession={(id, e) => { e.stopPropagation(); pm.handleDelete(id); }} 
-            closeSidebar={() => setIsSidebarOpen(false)}
-            savedChats={pm.savedChats}
-            activeChatId={pm.activeChatId}
-            onNewChat={pm.handleNewChat}
-            onSelectChat={pm.handleSelectChat}
-          />
-        </div>
-      </animated.div>
+      {/* Sidebar Esquerda (Autocontida) */}
+      <Sidebar 
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        appMode={appMode} setAppMode={setAppMode} isProcessing={pm.isProcessing}
+        onSelectDirectory={pm.handleSelectDirectory} outputFormat={pm.outputFormat}
+        setOutputFormat={pm.setOutputFormat} files={pm.files} openFileExplorer={() => setIsModalOpen(true)}
+        stats={{...stats, text: stats.text}} directoryName={pm.directoryName} diffContent={diffContent} setDiffContent={setDiffContent}
+        sessions={pm.sessions} onSelectSession={pm.loadSession} activeSessionId={pm.activeSessionId}
+        onDeleteSession={(id, e) => { e.stopPropagation(); pm.handleDelete(id); }} 
+        savedChats={pm.savedChats}
+        activeChatId={pm.activeChatId}
+        onNewChat={pm.handleNewChat}
+        onSelectChat={pm.handleSelectChat}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative min-w-0 bg-[#0f1117]">
@@ -118,7 +112,7 @@ const App: React.FC = () => {
       {/* Right Panel (Dashboard) */}
       <animated.div style={rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20">
         <div className="w-[450px] h-full flex flex-col">
-          <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onDownload={handleDownload} />
+          <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onExport={handleExport} />
           <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
             {pm.files.length > 0 ? (
               <Dashboard 
