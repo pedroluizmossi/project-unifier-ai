@@ -5,7 +5,7 @@ import { useAnalysis } from '../hooks/useAnalysis';
 import { fileToBase64 } from '../lib/utils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { useTransition, config } from 'react-spring';
+import { useTransition, config, animated } from 'react-spring';
 import ChatMessageItem from './ChatMessageItem';
 import TemplateSelectorModal from './TemplateSelectorModal';
 import SavedFavoritesModal from './SavedFavoritesModal';
@@ -29,10 +29,148 @@ interface AIAnalysisPanelProps {
   onRemoveFavorite: (id: string) => void;
 }
 
+// --- Logs de Pensamento Simulados (Contexto de Engenharia) ---
+const THOUGHT_LOGS = [
+  // --- Fase de Absorção e Escaneamento ---
+  "Digitalizando entradas e identificando intenções...",
+  "Mapeando conexões semânticas no prompt...",
+  "Recuperando fragmentos de contexto relevante...",
+  "Analisando camadas de significado implícito...",
+  "Indexando conceitos-chave para processamento...",
+
+  // --- Fase de Processamento e Análise ---
+  "Acessando base de conhecimento Gemini 3...",
+  "Cruzando referências e dados multidimensionais...",
+  "Avaliando padrões e analogias aplicáveis...",
+  "Ponderando múltiplas perspectivas e abordagens...",
+  "Executando simulações de cenários e resultados...",
+  "Validando consistência interna e lógica...",
+  "Filtrando ruídos e informações redundantes...",
+
+  // --- Fase de Síntese e Estruturação ---
+  "Sintetizando insights em uma estrutura coerente...",
+  "Ajustando o tom e a clareza da comunicação...",
+  "Refinando a precisão terminológica...",
+  "Otimizando a hierarquia das informações...",
+  "Poda de ramos irrelevantes na árvore de decisão...",
+  "Verificando integridade da resposta final...",
+  "Formatando saída para máxima legibilidade...",
+  "Finalizando síntese criativa..."
+];
+
+// --- 1. Loader Extravagante (Quantum Nexus + Neural Log) ---
+const QuantumNexusLoader = () => {
+  const [logs, setLogs] = useState<string[]>([]);
+  const [currentLogIndex, setCurrentLogIndex] = useState(0);
+
+  // Efeito para adicionar logs sequencialmente
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLogs(prev => {
+        const nextLog = THOUGHT_LOGS[currentLogIndex % THOUGHT_LOGS.length];
+        const newLogs = [...prev, nextLog];
+        if (newLogs.length > 4) newLogs.shift(); // Manter apenas os últimos 4
+        return newLogs;
+      });
+      setCurrentLogIndex(prev => prev + 1);
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [currentLogIndex]);
+
+  return (
+    <div className="flex flex-col items-center justify-center py-8 px-6 w-full animate-in fade-in duration-700">
+      
+      {/* Container do Reator */}
+      <div className="relative w-40 h-40 flex items-center justify-center mb-8">
+        <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full animate-pulse"></div>
+        <div className="absolute inset-0 border border-slate-700/50 rounded-full"></div>
+        <div className="absolute inset-0 border-2 border-transparent border-t-cyan-500/50 border-r-cyan-500/20 rounded-full animate-[spin_4s_linear_infinite]"></div>
+        <div className="absolute inset-4 border border-indigo-500/10 rounded-full"></div>
+        <div className="absolute inset-4 border-2 border-transparent border-b-purple-500 border-l-purple-500/50 rounded-full animate-[spin_2s_linear_infinite_reverse] shadow-[0_0_15px_rgba(168,85,247,0.4)]"></div>
+        <div className="absolute inset-10 border-2 border-dashed border-emerald-500/30 rounded-full animate-[spin_8s_linear_infinite]"></div>
+        <div className="absolute inset-10 border-2 border-transparent border-t-emerald-400 rounded-full animate-[spin_1s_linear_infinite]"></div>
+        <div className="relative z-10 w-14 h-14 bg-[#0f1117] rounded-full border border-indigo-500/50 flex items-center justify-center shadow-[inset_0_0_20px_rgba(99,102,241,0.5)]">
+           <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping opacity-20"></div>
+           <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_15px_white,0_0_30px_cyan] animate-pulse"></div>
+        </div>
+      </div>
+
+      <div className="w-full max-w-sm">
+         <h3 className="text-center text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 uppercase tracking-[0.2em] animate-pulse mb-4">
+           Processamento Neural
+         </h3>
+         
+         {/* Terminal de Pensamento */}
+         <div className="bg-[#0a0b10] border border-white/10 rounded-xl p-4 font-mono text-[10px] h-32 overflow-hidden relative shadow-inner shadow-black/50">
+            <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#0a0b10] to-transparent z-10"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#0a0b10] to-transparent z-10"></div>
+            
+            <div className="flex flex-col justify-end h-full gap-2">
+              {logs.map((log, i) => (
+                <div key={i} className="flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in duration-300">
+                   <span className="text-indigo-500">➜</span>
+                   <span className={`truncate ${i === logs.length - 1 ? 'text-cyan-300 font-bold' : 'text-slate-500'}`}>
+                     {log}
+                   </span>
+                   {i === logs.length - 1 && <span className="w-1.5 h-3 bg-cyan-400 animate-pulse inline-block ml-1"/>}
+                </div>
+              ))}
+            </div>
+         </div>
+         
+         <div className="flex justify-between items-center mt-2 px-1">
+            <div className="flex gap-1">
+               <div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></div>
+               <span className="text-[9px] text-emerald-500 font-bold uppercase">Online</span>
+            </div>
+            <span className="text-[9px] text-slate-600 font-mono">GEMINI-3-PRO::THREAD_ACTIVE</span>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// --- 2. Loader Sutil (Com texto dinâmico) ---
+const StandardChatLoader = () => {
+  const [currentThought, setCurrentThought] = useState("Sincronizando contexto...");
+
+  useEffect(() => {
+    let idx = 0;
+    const interval = setInterval(() => {
+      setCurrentThought(THOUGHT_LOGS[idx % THOUGHT_LOGS.length]);
+      idx++;
+    }, 1500); // Troca mais lenta para ser menos intrusivo no chat
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-4 py-3 px-2 max-w-[240px] animate-in fade-in slide-in-from-left-2">
+       {/* Signal Bars */}
+       <div className="flex items-end gap-1 h-5">
+          <div className="w-1 bg-indigo-500/60 rounded-full animate-[pulse_1s_ease-in-out_infinite] h-[40%]"></div>
+          <div className="w-1 bg-indigo-500/80 rounded-full animate-[pulse_1.1s_ease-in-out_infinite] h-[100%]"></div>
+          <div className="w-1 bg-indigo-500/60 rounded-full animate-[pulse_1.2s_ease-in-out_infinite] h-[60%]"></div>
+       </div>
+       
+       {/* Thinking Text Dinâmico */}
+       <div className="flex flex-col min-w-0">
+          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest animate-pulse">
+             Gemini Thinking
+          </span>
+          <span className="text-[9px] text-slate-500 font-mono truncate animate-in fade-in duration-300 key={currentThought}">
+             {currentThought}
+          </span>
+       </div>
+    </div>
+  );
+};
+
 const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
   const { 
     isAnalyzing, currentResponse, customPrompt, setCustomPrompt, 
-    stagedAttachments, setStagedAttachments, geminiConfig, setGeminiConfig, startAnalysis 
+    stagedAttachments, setStagedAttachments, geminiConfig, setGeminiConfig, startAnalysis,
+    suggestions, isGeneratingSuggestions, generateSuggestions
   } = useAnalysis(props.context, props.projectSpec, props.diffContext, props.history, props.onUpdateHistory);
 
   const [showSettings, setShowSettings] = useState(false);
@@ -61,6 +199,13 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
     from: { opacity: 0, transform: 'translateY(20px) scale(0.98)' },
     enter: { opacity: 1, transform: 'translateY(0px) scale(1)' },
     config: config.gentle
+  });
+  
+  const suggestionsTransition = useTransition(suggestions, {
+    from: { opacity: 0, transform: 'translateY(20px)', scale: 0.9 },
+    enter: { opacity: 1, transform: 'translateY(0px)', scale: 1 },
+    trail: 100,
+    config: config.wobbly
   });
 
   const handleSendMessage = () => {
@@ -168,32 +313,89 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
         )}
 
         {/* Chat Area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-20 lg:px-48 pt-24 pb-40 scrollbar-hide">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-20 lg:px-48 pt-24 pb-48 scrollbar-hide">
           {props.history.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-               <div className="relative group cursor-pointer" onClick={() => setTemplateModalOpen(true)}>
-                  <div className="w-32 h-32 bg-indigo-500/20 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
-                  <div className="relative w-24 h-24 bg-[#1e1e24] text-transparent bg-clip-text bg-gradient-to-tr from-indigo-400 to-purple-400 rounded-[2rem] flex items-center justify-center text-7xl border border-white/5 shadow-2xl transition-transform group-hover:scale-105 duration-300">
-                    ✦
-                  </div>
-               </div>
-               <div className="text-center max-w-md">
-                 <h3 className="text-2xl font-semibold text-white mb-2 tracking-tight">Project Unifier AI</h3>
-                 <p className="text-slate-500 text-sm leading-relaxed">
-                   Contexto carregado e pronto. Selecione uma ação rápida ou digite sua dúvida abaixo.
-                 </p>
-               </div>
+            <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 min-h-[500px]">
                
-               <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
-                 <button onClick={() => setTemplateModalOpen(true)} className="p-4 bg-[#1e1e24] hover:bg-[#2d2e35] border border-white/5 hover:border-indigo-500/30 rounded-2xl text-left transition-all group shadow-lg">
-                    <span className="block text-2xl mb-2 group-hover:scale-110 transition-transform origin-left">🔍</span>
-                    <span className="text-xs font-bold text-slate-300 block uppercase tracking-wide">Review Geral</span>
-                 </button>
-                 <button onClick={() => setTemplateModalOpen(true)} className="p-4 bg-[#1e1e24] hover:bg-[#2d2e35] border border-white/5 hover:border-emerald-500/30 rounded-2xl text-left transition-all group shadow-lg">
-                    <span className="block text-2xl mb-2 group-hover:scale-110 transition-transform origin-left">📐</span>
-                    <span className="text-xs font-bold text-slate-300 block uppercase tracking-wide">Arquitetura</span>
-                 </button>
+               {/* Hero Section */}
+               {!isGeneratingSuggestions && (
+                 <>
+                   <div className="relative group cursor-pointer text-center" onClick={() => setTemplateModalOpen(true)}>
+                      <div className="w-32 h-32 bg-indigo-500/20 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+                      <div className="relative w-24 h-24 mx-auto bg-[#1e1e24] text-transparent bg-clip-text bg-gradient-to-tr from-indigo-400 to-purple-400 rounded-[2rem] flex items-center justify-center text-7xl border border-white/5 shadow-2xl transition-transform group-hover:scale-105 duration-300">
+                        ✦
+                      </div>
+                   </div>
+
+                   {/* Welcome Text */}
+                   <div className="text-center max-w-md">
+                     <h3 className="text-2xl font-semibold text-white mb-2 tracking-tight">Project Unifier AI</h3>
+                     <p className="text-slate-500 text-sm leading-relaxed">
+                       Seu copiloto de engenharia está pronto.
+                     </p>
+                   </div>
+                 </>
+               )}
+               
+               {/* Dynamic Suggestion Area */}
+               <div className="w-full max-w-2xl min-h-[180px] flex items-center justify-center">
+                 
+                 {/* 1. Botão Inicial */}
+                 {!isGeneratingSuggestions && suggestions.length === 0 && (
+                   <div className="text-center space-y-3">
+                     <button 
+                       onClick={generateSuggestions}
+                       className="group relative px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm uppercase tracking-widest shadow-2xl shadow-indigo-600/20 transition-all hover:scale-105 active:scale-95 overflow-hidden"
+                     >
+                       <span className="relative z-10 flex items-center gap-2">
+                         <span>✨</span> Gerar Insights
+                       </span>
+                       <div className="absolute inset-0 bg-white/20 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                       {/* Background Shimmer Effect */}
+                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]"></div>
+                     </button>
+                     <p className="text-[10px] text-slate-600 font-medium">Gera 4 sugestões rápidas baseadas no seu código</p>
+                   </div>
+                 )}
+
+                 {/* 2. Estado de Carregamento EXTRAVAGANTE (Apenas aqui) */}
+                 {isGeneratingSuggestions && (
+                   <QuantumNexusLoader />
+                 )}
+
+                 {/* 3. Grid de Sugestões (Resultados) */}
+                 {!isGeneratingSuggestions && suggestions.length > 0 && (
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+                     {suggestionsTransition((style, suggestion) => (
+                       <animated.button
+                         style={style}
+                         onClick={() => startAnalysis(suggestion)}
+                         className="p-5 bg-[#1e1e24] hover:bg-indigo-900/10 border border-white/5 hover:border-indigo-500/40 rounded-2xl text-left transition-all group relative overflow-hidden"
+                       >
+                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                         <div className="relative z-10">
+                           <span className="block text-xl mb-2 grayscale group-hover:grayscale-0 transition-all">✨</span>
+                           <span className="text-sm font-medium text-slate-300 group-hover:text-indigo-200 leading-snug block">
+                             {suggestion}
+                           </span>
+                         </div>
+                       </animated.button>
+                     ))}
+                   </div>
+                 )}
                </div>
+
+               {/* Botões Estáticos de Apoio */}
+               {suggestions.length === 0 && !isGeneratingSuggestions && (
+                 <div className="grid grid-cols-2 gap-3 w-full max-w-md opacity-60 hover:opacity-100 transition-opacity">
+                   <button onClick={() => setTemplateModalOpen(true)} className="px-4 py-3 bg-[#13141c] hover:bg-[#1e1e24] border border-white/5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-300 transition-all">
+                      Ver Templates
+                   </button>
+                   <button onClick={() => startAnalysis("Faça um resumo executivo deste projeto.")} className="px-4 py-3 bg-[#13141c] hover:bg-[#1e1e24] border border-white/5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-300 transition-all">
+                      Resumo Simples
+                   </button>
+                 </div>
+               )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -207,16 +409,15 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                 />
               ))}
               
+              {/* ÁREA DE ANIMAÇÃO DE RESPOSTA (Chat Normal) */}
               {(isAnalyzing || currentResponse) && (
                 <div className="flex justify-start w-full animate-in fade-in pl-4">
-                  <div className="max-w-[85%]">
+                  <div className="max-w-[85%] w-full">
                      {!currentResponse && (
-                       <div className="flex items-center gap-1.5 h-8">
-                         <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
-                         <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-100"></div>
-                         <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-200"></div>
-                       </div>
+                       // Uso do Loader Sutil para conversas contínuas
+                       <StandardChatLoader />
                      )}
+                     
                      {currentResponse && (
                        <div className="prose prose-invert prose-p:leading-7 max-w-none text-slate-300">
                           <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(currentResponse) as string) }} />

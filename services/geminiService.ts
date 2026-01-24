@@ -198,3 +198,44 @@ export const generateAdaptiveTemplates = async (
     return [];
   }
 };
+
+export const generateSmartSuggestions = async (
+  projectContext: string
+): Promise<string[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Usamos um snippet para não gastar muitos tokens na sugestão rápida, mas suficiente para contexto
+  const contextSnippet = projectContext.slice(0, 50000); 
+
+  const prompt = `
+    Você é um Tech Lead analisando este código.
+    Gere 4 perguntas ou comandos curtos (max 10 palavras) que um desenvolvedor deveria fazer para auditar ou melhorar este projeto.
+    Foque em: Arquitetura, Bugs Potenciais, Segurança ou Performance.
+    Exemplos: "Analise o gerenciamento de estado", "Busque vazamento de memória nos hooks", "Audite a segurança das rotas de API".
+    
+    Retorne APENAS um JSON Array de strings. Ex: ["Pergunta 1", "Pergunta 2"]
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: [{ parts: [{ text: `CONTEXTO (Snippet):\n${contextSnippet}\n\n${prompt}` }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "[]") as string[];
+  } catch (error) {
+    console.warn("Erro ao gerar sugestões inteligentes:", error);
+    return [
+      "Explique a arquitetura principal",
+      "Identifique pontos de falha",
+      "Sugira melhorias de performance",
+      "Crie diagramas do sistema"
+    ]; // Fallback
+  }
+};

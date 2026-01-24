@@ -1,7 +1,7 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GeminiConfig, ChatMessage, Attachment } from '../types';
-import { performProjectAnalysis } from '../services/geminiService';
+import { performProjectAnalysis, generateSmartSuggestions } from '../services/geminiService';
 
 const DEFAULT_CONFIG: GeminiConfig = {
   model: 'gemini-3-pro-preview',
@@ -19,14 +19,37 @@ export const useAnalysis = (
   const [currentResponse, setCurrentResponse] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [stagedAttachments, setStagedAttachments] = useState<Attachment[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  
   const [geminiConfig, setGeminiConfig] = useState<GeminiConfig>(() => {
     const saved = localStorage.getItem('gemini_config_v2');
     return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
   });
 
+  const lastContextRef = useRef<string>('');
+
   useEffect(() => {
     localStorage.setItem('gemini_config_v2', JSON.stringify(geminiConfig));
   }, [geminiConfig]);
+
+  // Função manual para gerar sugestões
+  const generateSuggestions = async () => {
+    if (!context || context.length < 100) return;
+    
+    setIsGeneratingSuggestions(true);
+    // Limpa sugestões antigas para mostrar loading
+    setSuggestions([]); 
+    
+    try {
+      const newSuggestions = await generateSmartSuggestions(context);
+      if (newSuggestions && newSuggestions.length > 0) {
+        setSuggestions(newSuggestions);
+      }
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
+  };
 
   const startAnalysis = async (prompt: string, attachments: Attachment[] = []) => {
     if (!context || (!prompt.trim() && attachments.length === 0)) return;
@@ -44,6 +67,8 @@ export const useAnalysis = (
     setCurrentResponse('');
     setCustomPrompt('');
     setStagedAttachments([]);
+    // Limpa sugestões após uso para focar na conversa
+    setSuggestions([]); 
     
     try {
       const fullResponse = await performProjectAnalysis(
@@ -63,6 +88,6 @@ export const useAnalysis = (
 
   return {
     isAnalyzing, currentResponse, customPrompt, setCustomPrompt, stagedAttachments, setStagedAttachments,
-    geminiConfig, setGeminiConfig, startAnalysis
+    geminiConfig, setGeminiConfig, startAnalysis, suggestions, isGeneratingSuggestions, generateSuggestions
   };
 };
