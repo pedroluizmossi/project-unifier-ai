@@ -82,7 +82,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
       return;
     }
 
-    // Expand Logic
+    // Expand Logic (Updated to open Modal)
     const expandBtn = target.closest('.mermaid-expand');
     if (expandBtn) {
       const code = expandBtn.getAttribute('data-mermaid-code');
