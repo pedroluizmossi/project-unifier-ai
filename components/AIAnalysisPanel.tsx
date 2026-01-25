@@ -31,14 +31,11 @@ interface AIAnalysisPanelProps {
 
 // --- Logs de Pensamento Simulados (Contexto de Engenharia) ---
 const THOUGHT_LOGS = [
-  // --- Fase de Absorção e Escaneamento ---
   "Digitalizando entradas e identificando intenções...",
   "Mapeando conexões semânticas no prompt...",
   "Recuperando fragmentos de contexto relevante...",
   "Analisando camadas de significado implícito...",
   "Indexando conceitos-chave para processamento...",
-
-  // --- Fase de Processamento e Análise ---
   "Acessando base de conhecimento Gemini 3...",
   "Cruzando referências e dados multidimensionais...",
   "Avaliando padrões e analogias aplicáveis...",
@@ -46,8 +43,6 @@ const THOUGHT_LOGS = [
   "Executando simulações de cenários e resultados...",
   "Validando consistência interna e lógica...",
   "Filtrando ruídos e informações redundantes...",
-
-  // --- Fase de Síntese e Estruturação ---
   "Sintetizando insights em uma estrutura coerente...",
   "Ajustando o tom e a clareza da comunicação...",
   "Refinando a precisão terminológica...",
@@ -63,13 +58,12 @@ const QuantumNexusLoader = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
 
-  // Efeito para adicionar logs sequencialmente
   useEffect(() => {
     const interval = setInterval(() => {
       setLogs(prev => {
         const nextLog = THOUGHT_LOGS[currentLogIndex % THOUGHT_LOGS.length];
         const newLogs = [...prev, nextLog];
-        if (newLogs.length > 4) newLogs.shift(); // Manter apenas os últimos 4
+        if (newLogs.length > 4) newLogs.shift();
         return newLogs;
       });
       setCurrentLogIndex(prev => prev + 1);
@@ -101,7 +95,6 @@ const QuantumNexusLoader = () => {
            Processamento Neural
          </h3>
          
-         {/* Terminal de Pensamento */}
          <div className="bg-[#0a0b10] border border-white/10 rounded-xl p-4 font-mono text-[10px] h-32 overflow-hidden relative shadow-inner shadow-black/50">
             <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-[#0a0b10] to-transparent z-10"></div>
             <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-[#0a0b10] to-transparent z-10"></div>
@@ -140,20 +133,18 @@ const StandardChatLoader = () => {
     const interval = setInterval(() => {
       setCurrentThought(THOUGHT_LOGS[idx % THOUGHT_LOGS.length]);
       idx++;
-    }, 1500); // Troca mais lenta para ser menos intrusivo no chat
+    }, 1500);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="flex items-center gap-4 py-3 px-2 max-w-[240px] animate-in fade-in slide-in-from-left-2">
-       {/* Signal Bars */}
        <div className="flex items-end gap-1 h-5">
           <div className="w-1 bg-indigo-500/60 rounded-full animate-[pulse_1s_ease-in-out_infinite] h-[40%]"></div>
           <div className="w-1 bg-indigo-500/80 rounded-full animate-[pulse_1.1s_ease-in-out_infinite] h-[100%]"></div>
           <div className="w-1 bg-indigo-500/60 rounded-full animate-[pulse_1.2s_ease-in-out_infinite] h-[60%]"></div>
        </div>
        
-       {/* Thinking Text Dinâmico */}
        <div className="flex flex-col min-w-0">
           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest animate-pulse">
              Gemini Thinking
@@ -180,14 +171,12 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [props.history, currentResponse, isAnalyzing]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -260,6 +249,14 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${geminiConfig.useThinking ? 'bg-indigo-500' : 'bg-emerald-500'}`}></span>
               </div>
               
+              {/* Google Search Indicator */}
+              {geminiConfig.useSearch && (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-[#4285F4]/10 rounded-full border border-[#4285F4]/30">
+                  <span className="text-[10px] font-bold text-[#4285F4]">G</span>
+                  <span className="text-[9px] font-medium text-slate-300">Search</span>
+                </div>
+              )}
+
               {/* DIFF Context Indicator */}
               {props.diffContext && props.diffContext.trim().length > 0 && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/30 shadow-sm animate-in fade-in slide-in-from-left-2">
@@ -300,13 +297,30 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
               <button onClick={() => setGeminiConfig({...geminiConfig, model: 'gemini-3-pro-preview'})} className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${geminiConfig.model.includes('pro') ? 'bg-[#2d2e35] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>PRO</button>
               <button onClick={() => setGeminiConfig({...geminiConfig, model: 'gemini-3-flash-preview'})} className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${geminiConfig.model.includes('flash') ? 'bg-[#2d2e35] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>FLASH</button>
             </div>
-            <div className="flex items-center justify-between p-3 bg-[#0f1117] rounded-xl">
-              <span className="text-xs text-slate-300 font-medium">Deep Thinking</span>
+            
+            <div className="flex items-center justify-between p-3 bg-[#0f1117] rounded-xl mb-2">
+              <div className="flex flex-col">
+                <span className="text-xs text-slate-300 font-medium">Deep Thinking</span>
+                <span className="text-[9px] text-slate-600">Max reasoning budget</span>
+              </div>
               <button 
                 onClick={() => setGeminiConfig({...geminiConfig, useThinking: !geminiConfig.useThinking})}
                 className={`w-10 h-5 rounded-full relative transition-colors ${geminiConfig.useThinking ? 'bg-indigo-600' : 'bg-[#2d2e35]'}`}
               >
                 <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${geminiConfig.useThinking ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-[#0f1117] rounded-xl">
+              <div className="flex flex-col">
+                <span className="text-xs text-slate-300 font-medium">Google Search</span>
+                <span className="text-[9px] text-slate-600">Web grounding</span>
+              </div>
+              <button 
+                onClick={() => setGeminiConfig({...geminiConfig, useSearch: !geminiConfig.useSearch})}
+                className={`w-10 h-5 rounded-full relative transition-colors ${geminiConfig.useSearch ? 'bg-[#4285F4]' : 'bg-[#2d2e35]'}`}
+              >
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${geminiConfig.useSearch ? 'left-6' : 'left-1'}`} />
               </button>
             </div>
           </div>

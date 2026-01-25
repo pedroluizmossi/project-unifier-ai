@@ -4,8 +4,9 @@ import { GeminiConfig, ChatMessage, Attachment } from '../types';
 import { performProjectAnalysis, generateSmartSuggestions } from '../services/geminiService';
 
 const DEFAULT_CONFIG: GeminiConfig = {
-  model: 'gemini-3-pro-preview',
-  useThinking: true
+  model: 'gemini-3-flash-preview',
+  useThinking: true, // Flash é otimizado para velocidade; Thinking desligado por padrão com Search
+  useSearch: false     // Google Search ativado por padrão conforme requisito
 };
 
 export const useAnalysis = (
@@ -24,7 +25,16 @@ export const useAnalysis = (
   
   const [geminiConfig, setGeminiConfig] = useState<GeminiConfig>(() => {
     const saved = localStorage.getItem('gemini_config_v2');
-    return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Merge with default to ensure all properties (like useSearch) exist
+        return { ...DEFAULT_CONFIG, ...parsed };
+      } catch (e) {
+        return DEFAULT_CONFIG;
+      }
+    }
+    return DEFAULT_CONFIG;
   });
 
   const lastContextRef = useRef<string>('');

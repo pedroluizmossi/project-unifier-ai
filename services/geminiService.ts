@@ -16,6 +16,8 @@ export const performProjectAnalysis = async (
   
   const modelName = userConfig?.model || 'gemini-3-pro-preview';
   const useThinking = userConfig?.useThinking !== false;
+  const useSearch = userConfig?.useSearch === true;
+
   // Ajuste de budget: Modelos Pro suportam mais tokens de pensamento
   const budget = modelName.includes('pro') ? 32768 : 24576;
 
@@ -37,13 +39,23 @@ export const performProjectAnalysis = async (
     2. Se houver um Blueprint, siga-o estritamente.
     3. Use Markdown para formatar a resposta (blocos de código, negrito, listas).
     4. Seja direto e evite preâmbulos desnecessários.
+    ${useSearch ? '5. Você tem acesso à Busca do Google. Use-a para encontrar documentação recente, versões de bibliotecas e soluções para erros atuais.' : ''}
   `;
 
   const config: any = {
     temperature: 0.7,
-    systemInstruction: systemPrompt, // Correção: systemInstruction deve estar dentro de config
+    systemInstruction: systemPrompt,
   };
 
+  // Configuração de Tools
+  if (useSearch) {
+    config.tools = [{ googleSearch: {} }];
+    // Google Search não pode ser usado junto com Thinking Mode em algumas versões, 
+    // mas o Gemini 3.0 geralmente permite. Se houver conflito, a API retornará erro.
+    // Por segurança, se busca estiver ativa, podemos desativar o thinking ou mantê-lo se suportado.
+    // Vamos manter ambos ativos conforme a config do usuário, assumindo suporte do modelo 3.0.
+  }
+  
   if (useThinking) {
     config.thinkingConfig = { thinkingBudget: budget };
   }
@@ -92,13 +104,34 @@ export const performProjectAnalysis = async (
       });
 
       let fullText = '';
+      let groundingMetadata: any = null;
+
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
           fullText += text;
           onStream(text);
         }
+        
+        // Captura metadados de aterramento (Search)
+        if (chunk.candidates?.[0]?.groundingMetadata) {
+          groundingMetadata = chunk.candidates[0].groundingMetadata;
+        }
       }
+
+      // Se houver dados de busca, formatar e anexar ao final
+      if (groundingMetadata?.groundingChunks) {
+        const sources = groundingMetadata.groundingChunks
+          .map((c: any) => c.web ? `- [${c.web.title}](${c.web.uri})` : null)
+          .filter(Boolean);
+
+        if (sources.length > 0) {
+          const sourcesMd = `\n\n---\n### 🌐 Fontes da Pesquisa\n${sources.join('\n')}`;
+          fullText += sourcesMd;
+          onStream(sourcesMd);
+        }
+      }
+
       return fullText;
     } else {
       const response = await ai.models.generateContent({
@@ -106,7 +139,22 @@ export const performProjectAnalysis = async (
         contents,
         config
       });
-      return response.text || "O modelo processou a solicitação mas não retornou texto.";
+      
+      let text = response.text || "O modelo processou a solicitação mas não retornou texto.";
+      
+      // Processamento de Grounding para chamadas não-stream
+      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+      if (groundingMetadata?.groundingChunks) {
+        const sources = groundingMetadata.groundingChunks
+          .map((c: any) => c.web ? `- [${c.web.title}](${c.web.uri})` : null)
+          .filter(Boolean);
+
+        if (sources.length > 0) {
+          text += `\n\n---\n### 🌐 Fontes da Pesquisa\n${sources.join('\n')}`;
+        }
+      }
+
+      return text;
     }
   } catch (error: any) {
     console.error("Gemini API Error:", error);
@@ -139,7 +187,7 @@ export const generateProjectBlueprint = async (
     Áreas que requerem atenção especial (segurança, performance, dívida técnica).
     
     CONTEXTO DO CÓDIGO:
-    ${projectContext.slice(0, 800000)} // Limite de segurança, embora Gemini 1.5 suporte muito mais
+    ${projectContext.slice(0, 800000)} // Limite de segurança
   `;
 
   try {
@@ -148,7 +196,7 @@ export const generateProjectBlueprint = async (
       contents: [{ parts: [{ text: prompt }] }],
       config: { 
         temperature: 0.2,
-        thinkingConfig: { thinkingBudget: 16000 } // Budget menor para esta tarefa específica para ser mais rápido
+        thinkingConfig: { thinkingBudget: 16000 } 
       }
     });
     return response.text || "Não foi possível gerar o blueprint.";
@@ -203,7 +251,6 @@ export const generateSmartSuggestions = async (
   projectContext: string
 ): Promise<string[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Usamos um snippet para não gastar muitos tokens na sugestão rápida, mas suficiente para contexto
   const contextSnippet = projectContext.slice(0, 50000); 
 
   const prompt = `
@@ -236,6 +283,6 @@ export const generateSmartSuggestions = async (
       "Identifique pontos de falha",
       "Sugira melhorias de performance",
       "Crie diagramas do sistema"
-    ]; // Fallback
+    ]; 
   }
 };

@@ -38,6 +38,7 @@ export type AppMode = 'project' | 'mr_analysis';
 export interface GeminiConfig {
   model: 'gemini-3-pro-preview' | 'gemini-3-flash-preview';
   useThinking: boolean;
+  useSearch: boolean;
 }
 
 export interface ChatMessage {
