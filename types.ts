@@ -86,3 +86,21 @@ export interface PendingChange {
   originalContent: string;
   newContent: string;
 }
+
+// --- Diff Types ---
+export interface DiffFile {
+  oldFileName: string;
+  newFileName: string;
+  hunks: DiffHunk[];
+  type: 'add' | 'delete' | 'modify' | 'rename';
+  additions: number;
+  deletions: number;
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: string[];
+}

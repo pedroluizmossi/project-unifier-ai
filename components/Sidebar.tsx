@@ -2,6 +2,7 @@
 import React, { useRef } from 'react';
 import { AppMode, OutputFormat, ProcessorStatus, FileInfo, ProjectSession, ChatSession } from '../types';
 import { useTransition, animated, config, useSpring } from 'react-spring';
+import { formatBytes } from '../lib/utils';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -45,6 +46,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
 
   const diffFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Otimização: Se o conteúdo for maior que 300KB, não renderiza no textarea para não travar a UI
+  const isContentTooLarge = diffContent.length > 300 * 1024;
 
   // Animação de Layout encapsulada no componente
   const sidebarSpring = useSpring({
@@ -215,19 +219,41 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </button>
                 
                 <div className="relative">
-                  <textarea 
-                    value={diffContent}
-                    onChange={(e) => setDiffContent(e.target.value)}
-                    placeholder="Cole as mudanças (git diff) aqui para que a IA foque no que mudou..."
-                    className="w-full h-80 bg-[#1e1e24] border border-white/5 rounded-2xl p-4 text-[10px] font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none scrollbar-hide resize-none leading-relaxed"
-                  />
-                  {diffContent && (
-                    <button 
-                      onClick={() => setDiffContent('')}
-                      className="absolute top-3 right-3 p-1.5 bg-black/40 hover:bg-black/60 text-slate-500 hover:text-red-400 rounded-lg transition-all"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+                  {isContentTooLarge ? (
+                    <div className="w-full h-80 bg-[#1e1e24] border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4">
+                       <div className="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center text-2xl border border-amber-500/30">
+                         ⚠️
+                       </div>
+                       <div>
+                         <h4 className="text-xs font-bold text-white uppercase tracking-wider">Arquivo Grande Carregado</h4>
+                         <p className="text-[10px] text-slate-500 mt-1 max-w-[180px]">
+                           O conteúdo ({formatBytes(diffContent.length)}) foi ocultado para garantir a performance da UI, mas está pronto para análise.
+                         </p>
+                       </div>
+                       <button 
+                         onClick={() => setDiffContent('')}
+                         className="px-4 py-2 bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-400 rounded-lg text-[10px] font-bold uppercase transition-all"
+                       >
+                         Limpar Conteúdo
+                       </button>
+                    </div>
+                  ) : (
+                    <>
+                      <textarea 
+                        value={diffContent}
+                        onChange={(e) => setDiffContent(e.target.value)}
+                        placeholder="Cole as mudanças (git diff) aqui para que a IA foque no que mudou..."
+                        className="w-full h-80 bg-[#1e1e24] border border-white/5 rounded-2xl p-4 text-[10px] font-mono text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none scrollbar-hide resize-none leading-relaxed"
+                      />
+                      {diffContent && (
+                        <button 
+                          onClick={() => setDiffContent('')}
+                          className="absolute top-3 right-3 p-1.5 bg-black/40 hover:bg-black/60 text-slate-500 hover:text-red-400 rounded-lg transition-all"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

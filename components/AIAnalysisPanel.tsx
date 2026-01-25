@@ -34,6 +34,9 @@ interface AIAnalysisPanelProps {
   customSystemPrompt?: string;
   // Unified Settings Trigger
   onOpenSettings: () => void;
+  // External Analysis Trigger
+  externalTriggerPrompt?: string | null;
+  onExternalTriggerHandled?: () => void;
 }
 
 // --- Logs de Pensamento Simulados (Contexto de Engenharia) ---
@@ -190,6 +193,16 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
     }
   }, [customPrompt]);
+
+  // --- External Trigger Handler ---
+  useEffect(() => {
+    if (props.externalTriggerPrompt && !isAnalyzing) {
+      startAnalysis(props.externalTriggerPrompt);
+      if (props.onExternalTriggerHandled) {
+        props.onExternalTriggerHandled();
+      }
+    }
+  }, [props.externalTriggerPrompt]);
 
   const msgTransitions = useTransition(props.history, {
     from: { opacity: 0, transform: 'translateY(20px) scale(0.98)' },

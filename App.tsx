@@ -5,6 +5,7 @@ import { generateOutput, calculateTokens } from './lib/utils';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
+import DiffWorkspace from './components/DiffWorkspace'; // Novo Componente
 import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
 import DiffConfirmationModal from './components/DiffConfirmationModal';
@@ -29,6 +30,17 @@ const App: React.FC = () => {
   // Estado para reconstrução e confirmação
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
   const [isReconstructing, setIsReconstructing] = useState(false);
+
+  // Estado para acionar a IA vindo de componentes externos (DiffWorkspace)
+  const [externalTriggerPrompt, setExternalTriggerPrompt] = useState<string | null>(null);
+
+  // Helper para injetar prompt na IA vindo do DiffWorkspace
+  const handleDiffAnalysis = (prompt: string) => {
+    // Apenas define o trigger. O AIAnalysisPanel observará este estado.
+    setExternalTriggerPrompt(prompt);
+    // Garante que o painel da IA (Esquerda) esteja visível e o contexto (Direita) seja fechado para focar no chat
+    setIsContextOpen(false); 
+  };
 
   const outputContent = useMemo(() => 
     generateOutput(pm.directoryName || 'Project', pm.files, pm.outputFormat), 
@@ -73,10 +85,6 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  /**
-   * Ponto de entrada para aplicar mudanças:
-   * Chama o Gemini Flash para reconstruir o arquivo completo caso a sugestão seja parcial.
-   */
   const handleRequestApplyChange = async (path: string, partialFix: string) => {
     const file = pm.files.find(f => f.path === path);
     if (!file) {
@@ -85,11 +93,10 @@ const App: React.FC = () => {
     }
 
     setIsReconstructing(true);
-    // Inicializa o modal com o conteúdo atual para mostrar que estamos carregando
     setPendingChange({
       path,
       originalContent: file.content || '',
-      newContent: '' // Será preenchido pelo Gemini
+      newContent: '' 
     });
 
     try {
@@ -138,12 +145,23 @@ const App: React.FC = () => {
         onSelectChat={pm.handleSelectChat}
       />
 
+      {/* PAINEL CENTRAL (ESQUERDA - IA) */}
       <div className="flex-1 flex flex-col relative min-w-0 bg-[#0f1117]">
         <AIAnalysisPanel 
           context={outputContent} projectSpec={pm.projectSpec} 
           diffContext={appMode === 'mr_analysis' ? diffContent : undefined} 
           history={pm.chatHistory} onUpdateHistory={pm.setChatHistory}
-          isContextOpen={isContextOpen} toggleContext={() => setIsContextOpen(!isContextOpen)}
+          isContextOpen={isContextOpen} 
+          toggleContext={() => {
+            if (appMode === 'mr_analysis') {
+              // Se estiver no modo Diff, ao clicar em "Dashboard" (ou Fechar Painel),
+              // forçamos a volta para o modo Projeto e abrimos o Dashboard.
+              setAppMode('project');
+              setIsContextOpen(true);
+            } else {
+              setIsContextOpen(!isContextOpen);
+            }
+          }}
           savedChats={pm.savedChats} activeChatId={pm.activeChatId}
           onNewChat={pm.handleNewChat} onSelectChat={pm.handleSelectChat}
           isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -152,23 +170,35 @@ const App: React.FC = () => {
           onApplyChange={handleRequestApplyChange}
           customSystemPrompt={pm.systemPrompts.systemPersona}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          externalTriggerPrompt={externalTriggerPrompt}
+          onExternalTriggerHandled={() => setExternalTriggerPrompt(null)}
         />
       </div>
 
-      <animated.div style={rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20">
-        <div className="w-[450px] h-full flex flex-col">
-          <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onExport={handleExport} />
-          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-            {pm.files.length > 0 ? (
-              <Dashboard 
-                files={pm.files} stats={stats} availableLanguages={availableLanguages}
-                isGeneratingSummary={pm.isGeneratingSummary} projectSummary={pm.projectSummary}
-                projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
-                outputContent={outputContent} outputFormat={pm.outputFormat}
-                openFileExplorer={() => setIsModalOpen(true)}
-              />
-            ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>}
-          </div>
+      {/* PAINEL DIREITO (CONTEXTO / DASHBOARD / DIFF) */}
+      <animated.div style={appMode === 'mr_analysis' ? { width: '60%', opacity: 1 } : rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20 transition-all duration-300">
+        <div className="w-full h-full flex flex-col">
+          {appMode === 'project' ? (
+            <>
+              <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onExport={handleExport} />
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+                {pm.files.length > 0 ? (
+                  <Dashboard 
+                    files={pm.files} stats={stats} availableLanguages={availableLanguages}
+                    isGeneratingSummary={pm.isGeneratingSummary} projectSummary={pm.projectSummary}
+                    projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
+                    outputContent={outputContent} outputFormat={pm.outputFormat}
+                    openFileExplorer={() => setIsModalOpen(true)}
+                  />
+                ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>}
+              </div>
+            </>
+          ) : (
+            <DiffWorkspace 
+              diffContent={diffContent} 
+              onAnalyze={handleDiffAnalysis}
+            />
+          )}
         </div>
       </animated.div>
 
