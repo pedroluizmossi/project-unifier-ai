@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, ChatSession, Attachment, SavedResponse } from '../types';
+import { ChatMessage, ChatSession, Attachment, SavedResponse, FileInfo } from '../types';
 import { useAnalysis } from '../hooks/useAnalysis';
 import { fileToBase64 } from '../lib/utils';
 import { marked } from 'marked';
@@ -27,6 +27,13 @@ interface AIAnalysisPanelProps {
   favorites: SavedResponse[];
   onToggleFavorite: (content: string) => void;
   onRemoveFavorite: (id: string) => void;
+  // New props for applying changes
+  files: FileInfo[];
+  onApplyChange: (path: string, newContent: string) => void;
+  // System Prompt Override
+  customSystemPrompt?: string;
+  // Unified Settings Trigger
+  onOpenSettings: () => void;
 }
 
 // --- Logs de Pensamento Simulados (Contexto de Engenharia) ---
@@ -162,7 +169,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
     isAnalyzing, currentResponse, customPrompt, setCustomPrompt, 
     stagedAttachments, setStagedAttachments, geminiConfig, setGeminiConfig, startAnalysis,
     suggestions, isGeneratingSuggestions, generateSuggestions
-  } = useAnalysis(props.context, props.projectSpec, props.diffContext, props.history, props.onUpdateHistory);
+  } = useAnalysis(props.context, props.projectSpec, props.diffContext, props.history, props.onUpdateHistory, props.customSystemPrompt);
 
   const [showSettings, setShowSettings] = useState(false);
   const [isTemplateModalOpen, setTemplateModalOpen] = useState(false);
@@ -323,6 +330,25 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                 <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${geminiConfig.useSearch ? 'left-6' : 'left-1'}`} />
               </button>
             </div>
+
+            {/* UNIFIED SYSTEM SETTINGS BUTTON */}
+            <div className="mt-3 pt-3 border-t border-white/5">
+              <button 
+                onClick={() => {
+                   props.onOpenSettings();
+                   setShowSettings(false);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/5 rounded-lg group transition-colors"
+              >
+                 <div className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                 </div>
+                 <div>
+                    <span className="text-[10px] font-bold text-slate-300 block group-hover:text-white uppercase tracking-wider">Sistema</span>
+                    <span className="text-[9px] text-slate-500 block">Prompts & Comportamento</span>
+                 </div>
+              </button>
+            </div>
           </div>
         )}
 
@@ -420,6 +446,8 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                   style={style} 
                   onFavorite={props.onToggleFavorite}
                   isFavorite={props.favorites.some(f => f.content === msg.text)}
+                  files={props.files}
+                  onApplyChange={props.onApplyChange}
                 />
               ))}
               
@@ -475,7 +503,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = (props) => {
                 className="p-3 text-slate-500 hover:text-white hover:bg-white/5 rounded-full transition-colors flex-shrink-0"
                 title="Anexar arquivos"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
               </button>
 
               <textarea

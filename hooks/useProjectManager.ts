@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ProjectSession, FileInfo, OutputFormat, ChatSession, ChatMessage, SavedResponse } from '../types';
+import { ProjectSession, FileInfo, OutputFormat, ChatSession, ChatMessage, SavedResponse, SystemPrompts } from '../types';
 import { getSessions, saveSession, deleteSession, getFavorites, saveFavorite, deleteFavorite } from '../lib/storage';
 import { collectFileHandles, processFile, processFileList, generateOutput } from '../lib/utils';
-import { DEFAULT_IGNORE } from '../constants';
+import { DEFAULT_IGNORE, DEFAULT_SYSTEM_PROMPT, DEFAULT_MERGE_PROMPT, DEFAULT_BLUEPRINT_PROMPT } from '../constants';
 import { performProjectAnalysis, generateProjectBlueprint } from '../services/geminiService';
 
 const ACTIVE_SESSION_KEY = 'unifier_active_session_id';
+const PROMPTS_CONFIG_KEY = 'unifier_system_prompts';
 
 export const useProjectManager = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => localStorage.getItem(ACTIVE_SESSION_KEY));
@@ -20,7 +21,31 @@ export const useProjectManager = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const isInitialMount = useRef(true);
 
-  // Fix: Added missing fileInputRef to handle file picker fallback logic
+  // System Prompts State with LocalStorage persistence
+  const [systemPrompts, setSystemPrompts] = useState<SystemPrompts>(() => {
+    const saved = localStorage.getItem(PROMPTS_CONFIG_KEY);
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch(e) { console.error("Error parsing saved prompts", e); }
+    }
+    return {
+        systemPersona: DEFAULT_SYSTEM_PROMPT,
+        mergeLogic: DEFAULT_MERGE_PROMPT,
+        blueprintLogic: DEFAULT_BLUEPRINT_PROMPT
+    };
+  });
+
+  // Save prompts when changed
+  useEffect(() => {
+    localStorage.setItem(PROMPTS_CONFIG_KEY, JSON.stringify(systemPrompts));
+  }, [systemPrompts]);
+
+  // Indica se podemos gravar diretamente no disco (File System Access API ativa)
+  const [canWriteDirectly, setCanWriteDirectly] = useState(false);
+
+  // Armazena handles reais (não serializáveis) para escrita
+  const fileHandlesRef = useRef<Map<string, FileSystemFileHandle>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Favorites state
@@ -36,13 +61,9 @@ export const useProjectManager = () => {
     const init = async () => {
       await refreshFavorites();
       const list = await refreshSessions();
-      
-      // Se houver um ID salvo, tenta carregar
       if (activeSessionId) {
         const lastSession = list.find(s => s.id === activeSessionId);
-        if (lastSession) {
-          loadSession(lastSession);
-        }
+        if (lastSession) loadSession(lastSession);
       }
       isInitialMount.current = false;
     };
@@ -60,19 +81,13 @@ export const useProjectManager = () => {
     setFavorites(list);
   };
 
-  // Salvar ID ativo no localStorage
   useEffect(() => {
-    if (activeSessionId) {
-      localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
-    } else {
-      localStorage.removeItem(ACTIVE_SESSION_KEY);
-    }
+    if (activeSessionId) localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+    else localStorage.removeItem(ACTIVE_SESSION_KEY);
   }, [activeSessionId]);
 
-  // Sincronizar Histórico com Chats Salvos
   useEffect(() => {
     if (isInitialMount.current) return;
-    
     if (chatHistory.length > 0) {
       setSavedChats(prev => {
         const idx = prev.findIndex(c => c.id === activeChatId);
@@ -91,10 +106,8 @@ export const useProjectManager = () => {
     }
   }, [chatHistory, activeChatId]);
 
-  // Persistência Automática da Sessão Inteira
   useEffect(() => {
     if (isInitialMount.current || !directoryName || files.length === 0) return;
-
     const session: ProjectSession = {
       id: activeSessionId || crypto.randomUUID(),
       name: directoryName,
@@ -105,14 +118,10 @@ export const useProjectManager = () => {
       lastUpdated: Date.now(),
       outputFormat
     };
-
     if (!activeSessionId) setActiveSessionId(session.id);
-    
-    // Debounce manual simples para evitar escritas excessivas no DB
     const timeout = setTimeout(() => {
       saveSession(session).then(refreshSessions);
     }, 500);
-
     return () => clearTimeout(timeout);
   }, [files, projectSummary, projectSpec, savedChats, outputFormat, directoryName]);
 
@@ -123,6 +132,8 @@ export const useProjectManager = () => {
     setProjectSummary(session.summary);
     setProjectSpec(session.specification || '');
     setOutputFormat(session.outputFormat || 'markdown');
+    fileHandlesRef.current.clear();
+    setCanWriteDirectly(false); // Reset ao carregar do DB (precisa re-abrir pasta para escrever)
     
     if (session.chats?.length) {
       setSavedChats(session.chats);
@@ -140,6 +151,8 @@ export const useProjectManager = () => {
     setFiles([]);
     setProjectSummary('');
     setProjectSpec('');
+    setCanWriteDirectly(false);
+    fileHandlesRef.current.clear();
     handleNewChat();
   };
 
@@ -166,28 +179,24 @@ export const useProjectManager = () => {
     try {
       const handle = await (window as any).showDirectoryPicker();
       setIsProcessing(true);
-      
-      // Limpar estados para novo projeto
       handleNewProject();
-
       const handles = await collectFileHandles(handle, DEFAULT_IGNORE);
+      fileHandlesRef.current.clear();
+      handles.forEach(h => fileHandlesRef.current.set(h.path, h.handle));
       const results = await Promise.all(handles.map(h => processFile(h.handle, h.path, 500)));
-      
       const processedFiles = results.filter((f): f is FileInfo => f !== null);
       setDirectoryName(handle.name);
       setFiles(processedFiles);
+      setCanWriteDirectly(true); // Se abriu via Directory Picker, podemos escrever
     } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.warn("Directory Picker fail, falling back to input", err);
-        fileInputRef.current?.click();
-      }
+      console.warn("Direct access failed, using fallback upload", err);
+      fileInputRef.current?.click();
     } finally { setIsProcessing(false); }
   };
 
   const handleFilesFallback = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
-    
     setIsProcessing(true);
     try {
       const results = await processFileList(fileList, DEFAULT_IGNORE, 500);
@@ -195,6 +204,7 @@ export const useProjectManager = () => {
         handleNewProject();
         setDirectoryName(fileList[0].webkitRelativePath.split('/')[0] || "Upload");
         setFiles(results);
+        setCanWriteDirectly(false); // Upload padrão não permite escrita direta
       }
     } finally {
       setIsProcessing(false);
@@ -208,8 +218,8 @@ export const useProjectManager = () => {
     try {
       const config = JSON.parse(localStorage.getItem('gemini_config_v2') || '{}');
       const [summary, spec] = await Promise.all([
-        performProjectAnalysis(content, "Gere um resumo executivo de 3 parágrafos.", undefined, undefined, config),
-        generateProjectBlueprint(content, config)
+        performProjectAnalysis(content, "Gere um resumo executivo de 3 parágrafos.", undefined, undefined, config, undefined, [], [], systemPrompts.systemPersona),
+        generateProjectBlueprint(content, config, systemPrompts.blueprintLogic)
       ]);
       setProjectSummary(summary);
       setProjectSpec(spec);
@@ -220,16 +230,8 @@ export const useProjectManager = () => {
 
   const toggleFavorite = async (content: string, title?: string) => {
     const existing = favorites.find(f => f.content === content);
-    if (existing) {
-      await deleteFavorite(existing.id);
-    } else {
-      await saveFavorite({
-        id: crypto.randomUUID(),
-        title: title || 'Resposta Salva',
-        content,
-        timestamp: Date.now()
-      });
-    }
+    if (existing) await deleteFavorite(existing.id);
+    else await saveFavorite({ id: crypto.randomUUID(), title: title || 'Resposta Salva', content, timestamp: Date.now() });
     await refreshFavorites();
   };
 
@@ -238,10 +240,44 @@ export const useProjectManager = () => {
     await refreshFavorites();
   };
 
+  const applyFileChange = async (path: string, newContent: string) => {
+    const handle = fileHandlesRef.current.get(path);
+    
+    // Se não tiver handle, oferecemos o download
+    if (!handle || !canWriteDirectly) {
+      const fileName = path.split('/').pop() || 'fix.txt';
+      const blob = new Blob([newContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      // Atualiza o estado local mesmo assim para a UI refletir a mudança
+      updateLocalFileState(path, newContent);
+      return;
+    }
+
+    try {
+      const writable = await (handle as any).createWritable();
+      await writable.write(newContent);
+      await writable.close();
+      updateLocalFileState(path, newContent);
+    } catch (e: any) {
+      throw new Error("Falha ao escrever no disco: " + e.message + ". Tente baixar o arquivo.");
+    }
+  };
+
+  const updateLocalFileState = (path: string, content: string) => {
+    setFiles(prev => prev.map(f => f.path === path ? { ...f, content, line_count: content.split('\n').length, size_kb: content.length / 1024 } : f));
+  };
+
   return {
     activeSessionId, sessions, directoryName, files, setFiles, outputFormat, setOutputFormat,
     projectSummary, projectSpec, isGeneratingSummary, isProcessing, savedChats, activeChatId, chatHistory, setChatHistory,
-    favorites, toggleFavorite, removeFavorite,
-    loadSession, handleNewProject, handleNewChat, handleSelectChat, handleDelete, handleSelectDirectory, handleFilesFallback, generateSummary, fileInputRef
+    favorites, toggleFavorite, removeFavorite, applyFileChange, canWriteDirectly,
+    loadSession, handleNewProject, handleNewChat, handleSelectChat, handleDelete, handleSelectDirectory, handleFilesFallback, generateSummary, fileInputRef,
+    systemPrompts, setSystemPrompts
   };
 };

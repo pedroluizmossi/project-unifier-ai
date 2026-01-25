@@ -41,6 +41,12 @@ export interface GeminiConfig {
   useSearch: boolean;
 }
 
+export interface SystemPrompts {
+  systemPersona: string;
+  mergeLogic: string;
+  blueprintLogic: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
@@ -73,4 +79,10 @@ export interface ProjectSession {
   favorites?: SavedResponse[];
   lastUpdated: number;
   outputFormat: OutputFormat;
+}
+
+export interface PendingChange {
+  path: string;
+  originalContent: string;
+  newContent: string;
 }

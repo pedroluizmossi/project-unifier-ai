@@ -7,21 +7,28 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
+import DiffConfirmationModal from './components/DiffConfirmationModal';
+import SettingsModal from './components/SettingsModal';
 import { useSpring, animated } from 'react-spring';
-import { OutputFormat } from './types';
+import { OutputFormat, PendingChange } from './types';
+import { mergeCodeChanges } from './services/geminiService';
 
 const App: React.FC = () => {
   const pm = useProjectManager();
   const [appMode, setAppMode] = useState<'project' | 'mr_analysis'>('project');
   
-  // Estado Visual
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isContextOpen, setIsContextOpen] = useState(false);
   
   const [diffContent, setDiffContent] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [langFilter, setLangFilter] = useState('all');
+
+  // Estado para reconstrução e confirmação
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
+  const [isReconstructing, setIsReconstructing] = useState(false);
 
   const outputContent = useMemo(() => 
     generateOutput(pm.directoryName || 'Project', pm.files, pm.outputFormat), 
@@ -46,7 +53,6 @@ const App: React.FC = () => {
     (langFilter === 'all' || f.language === langFilter)
   ), [pm.files, searchTerm, langFilter]);
 
-  // Animações de Layout
   const rightPanelSpring = useSpring({ 
     width: isContextOpen ? 450 : 0, 
     opacity: isContextOpen ? 1 : 0,
@@ -54,9 +60,7 @@ const App: React.FC = () => {
   });
 
   const handleExport = (format: OutputFormat) => {
-    // Gera o conteúdo sob demanda baseada no formato solicitado, ignorando o estado visual atual
     const contentToExport = generateOutput(pm.directoryName || 'Project', pm.files, format);
-    
     const blob = new Blob([contentToExport], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -69,6 +73,46 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * Ponto de entrada para aplicar mudanças:
+   * Chama o Gemini Flash para reconstruir o arquivo completo caso a sugestão seja parcial.
+   */
+  const handleRequestApplyChange = async (path: string, partialFix: string) => {
+    const file = pm.files.find(f => f.path === path);
+    if (!file) {
+      alert("Arquivo não encontrado no projeto atual.");
+      return;
+    }
+
+    setIsReconstructing(true);
+    // Inicializa o modal com o conteúdo atual para mostrar que estamos carregando
+    setPendingChange({
+      path,
+      originalContent: file.content || '',
+      newContent: '' // Será preenchido pelo Gemini
+    });
+
+    try {
+      const fullUpdatedContent = await mergeCodeChanges(file.content || '', partialFix, path, pm.systemPrompts.mergeLogic);
+      setPendingChange(prev => prev ? { ...prev, newContent: fullUpdatedContent } : null);
+    } catch (e: any) {
+      alert(e.message);
+      setPendingChange(null);
+    } finally {
+      setIsReconstructing(false);
+    }
+  };
+
+  const confirmApplyChange = async () => {
+    if (!pendingChange) return;
+    try {
+      await pm.applyFileChange(pendingChange.path, pendingChange.newContent);
+      setPendingChange(null);
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[#0f1117] text-slate-200 overflow-hidden font-sans">
       <input 
@@ -79,7 +123,6 @@ const App: React.FC = () => {
         {...({ webkitdirectory: "", directory: "" } as any)} 
       />
       
-      {/* Sidebar Esquerda (Autocontida) */}
       <Sidebar 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -95,7 +138,6 @@ const App: React.FC = () => {
         onSelectChat={pm.handleSelectChat}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative min-w-0 bg-[#0f1117]">
         <AIAnalysisPanel 
           context={outputContent} projectSpec={pm.projectSpec} 
@@ -106,10 +148,13 @@ const App: React.FC = () => {
           onNewChat={pm.handleNewChat} onSelectChat={pm.handleSelectChat}
           isSidebarOpen={isSidebarOpen} toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           favorites={pm.favorites} onToggleFavorite={pm.toggleFavorite} onRemoveFavorite={pm.removeFavorite}
+          files={pm.files}
+          onApplyChange={handleRequestApplyChange}
+          customSystemPrompt={pm.systemPrompts.systemPersona}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
       </div>
 
-      {/* Right Panel (Dashboard) */}
       <animated.div style={rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20">
         <div className="w-[450px] h-full flex flex-col">
           <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onExport={handleExport} />
@@ -144,6 +189,22 @@ const App: React.FC = () => {
           if (visible && action === 'deselect_filtered') return { ...f, selected: false };
           return f;
         }))}
+      />
+
+      <DiffConfirmationModal 
+        isOpen={!!pendingChange}
+        onClose={() => setPendingChange(null)}
+        onConfirm={confirmApplyChange}
+        pendingChange={pendingChange}
+        isLoading={isReconstructing}
+        canWriteDirectly={pm.canWriteDirectly}
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        prompts={pm.systemPrompts}
+        onSave={pm.setSystemPrompts}
       />
     </div>
   );

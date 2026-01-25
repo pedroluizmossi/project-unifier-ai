@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ChatMessage } from '../types';
+import { ChatMessage, FileInfo } from '../types';
 import { animated } from 'react-spring';
 import { CopyIcon, GeminiSparkle, FileIcon, CheckIcon } from './Icons';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -10,9 +10,11 @@ interface ChatMessageItemProps {
   style: any;
   onFavorite?: (content: string) => void;
   isFavorite?: boolean;
+  files?: FileInfo[];
+  onApplyChange?: (path: string, newContent: string) => void;
 }
 
-const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, style, onFavorite, isFavorite }) => {
+const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, style, onFavorite, isFavorite, files, onApplyChange }) => {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
 
@@ -59,6 +61,8 @@ const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, style, onFav
           <MarkdownRenderer 
             content={message.text} 
             className={`${!isUser ? 'prose-headings:text-indigo-300 prose-a:text-indigo-400' : ''}`}
+            files={files}
+            onApplyChange={onApplyChange}
           />
         </div>
 

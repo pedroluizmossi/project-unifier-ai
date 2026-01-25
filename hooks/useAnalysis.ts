@@ -14,7 +14,8 @@ export const useAnalysis = (
   projectSpec: string | undefined,
   diffContext: string | undefined,
   history: ChatMessage[],
-  onUpdateHistory: (h: ChatMessage[]) => void
+  onUpdateHistory: (h: ChatMessage[]) => void,
+  customSystemPrompt?: string
 ) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentResponse, setCurrentResponse] = useState('');
@@ -85,7 +86,8 @@ export const useAnalysis = (
         context, prompt, 
         (chunk) => setCurrentResponse(prev => prev + chunk), 
         diffContext, geminiConfig, projectSpec, attachments,
-        history
+        history,
+        customSystemPrompt
       );
       onUpdateHistory([...updatedHistory, { role: 'model', text: fullResponse, timestamp: Date.now() }]);
       setCurrentResponse('');
