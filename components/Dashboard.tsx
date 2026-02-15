@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FileInfo, OutputFormat } from '../types';
 import { formatBytes } from '../lib/utils';
 import { useTrail, animated, useSpring, config } from 'react-spring';
@@ -18,7 +18,10 @@ interface DashboardProps {
   openFileExplorer?: () => void; // Prop opcional para abrir o modal
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ 
+// Limite de caracteres para renderização do preview para evitar travamento da UI
+const MAX_PREVIEW_LENGTH = 15000;
+
+const Dashboard: React.FC<DashboardProps> = React.memo(({ 
   files, stats, availableLanguages, isGeneratingSummary, 
   projectSummary, projectSpec, onGenerateSummary, outputContent, outputFormat,
   openFileExplorer
@@ -44,6 +47,12 @@ const Dashboard: React.FC<DashboardProps> = ({
     transform: (activeTab === 'summary' ? projectSummary : projectSpec) || isGeneratingSummary ? 'scale(1)' : 'scale(0.98)',
     config: config.stiff
   });
+
+  // Otimização: Trunca o conteúdo para o preview, evitando renderizar MBs de texto no DOM
+  const truncatedPreview = useMemo(() => {
+    if (outputContent.length <= MAX_PREVIEW_LENGTH) return outputContent;
+    return outputContent.slice(0, MAX_PREVIEW_LENGTH) + `\n\n... [Conteúdo truncado para performance. O arquivo exportado conterá todos os ${outputContent.length.toLocaleString()} caracteres.] ...`;
+  }, [outputContent]);
 
   return (
     <div className="space-y-6">
@@ -109,14 +118,17 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="bg-slate-900/30 rounded-2xl border border-slate-800 overflow-hidden backdrop-blur-sm">
         <div className="bg-slate-800/30 px-4 py-3 flex items-center justify-between border-b border-slate-800">
           <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest font-black">preview.{outputFormat}</span>
+          {outputContent.length > MAX_PREVIEW_LENGTH && (
+             <span className="text-[8px] text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Preview Limitado</span>
+          )}
         </div>
         <pre className="p-4 text-[10px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto scrollbar-hide selection:bg-indigo-500/30 selection:text-white">
-          {outputContent}
+          {truncatedPreview}
         </pre>
       </div>
     </div>
   );
-};
+});
 
 const MetricCard = ({ title, value, icon, isMono }: any) => (
   <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl hover:border-indigo-500/30 transition-colors flex flex-col justify-between group">

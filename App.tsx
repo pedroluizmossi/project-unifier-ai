@@ -10,7 +10,7 @@ import FileExplorerModal from './components/FileExplorerModal';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
 import DiffConfirmationModal from './components/DiffConfirmationModal';
 import SettingsModal from './components/SettingsModal';
-import { useSpring, animated } from 'react-spring';
+import { animated } from 'react-spring'; // Mantendo animated para outros componentes se necessário, mas removendo o spring do painel direito
 import { OutputFormat, PendingChange } from './types';
 import { mergeCodeChanges } from './services/geminiService';
 
@@ -65,12 +65,6 @@ const App: React.FC = () => {
     (langFilter === 'all' || f.language === langFilter)
   ), [pm.files, searchTerm, langFilter]);
 
-  const rightPanelSpring = useSpring({ 
-    width: isContextOpen ? 450 : 0, 
-    opacity: isContextOpen ? 1 : 0,
-    config: { tension: 210, friction: 20 }
-  });
-
   const handleExport = (format: OutputFormat) => {
     const contentToExport = generateOutput(pm.directoryName || 'Project', pm.files, format);
     const blob = new Blob([contentToExport], { type: 'text/plain' });
@@ -118,6 +112,28 @@ const App: React.FC = () => {
     } catch (e: any) {
       alert(e.message);
     }
+  };
+
+  // Cálculo de classes CSS para o painel direito (Performance Fix)
+  const getRightPanelClasses = () => {
+    const baseClasses = "h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20 transition-[width,opacity,transform] duration-300 ease-in-out will-change-[width]";
+    
+    if (appMode === 'mr_analysis') {
+      return `${baseClasses} w-full md:w-[60%] opacity-100 translate-x-0`;
+    }
+    
+    if (isContextOpen) {
+      return `${baseClasses} w-full md:w-[450px] opacity-100 translate-x-0`;
+    }
+    
+    return `${baseClasses} w-0 opacity-0 translate-x-20 overflow-hidden`;
+  };
+
+  // Nova função para seleção em lote (corrige bug de pastas)
+  const handleBatchSelection = (paths: string[], selected: boolean) => {
+    pm.setFiles(prev => prev.map(f => 
+      paths.includes(f.path) ? { ...f, selected } : f
+    ));
   };
 
   return (
@@ -176,21 +192,25 @@ const App: React.FC = () => {
       </div>
 
       {/* PAINEL DIREITO (CONTEXTO / DASHBOARD / DIFF) */}
-      <animated.div style={appMode === 'mr_analysis' ? { width: '60%', opacity: 1 } : rightPanelSpring} className="h-full bg-[#13141c] border-l border-slate-800/50 flex flex-col overflow-hidden shadow-2xl z-20 transition-all duration-300">
-        <div className="w-full h-full flex flex-col">
+      {/* Removemos animated.div e usamos classes CSS puras para evitar layout thrashing do JS */}
+      <div className={getRightPanelClasses()}>
+        <div className="w-full h-full flex flex-col min-w-[300px]"> {/* min-w impede reflow interno durante animação */}
           {appMode === 'project' ? (
             <>
               <Header directoryName={pm.directoryName} hasFiles={pm.files.some(f => f.selected)} onExport={handleExport} />
               <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-                {pm.files.length > 0 ? (
-                  <Dashboard 
-                    files={pm.files} stats={stats} availableLanguages={availableLanguages}
-                    isGeneratingSummary={pm.isGeneratingSummary} projectSummary={pm.projectSummary}
-                    projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
-                    outputContent={outputContent} outputFormat={pm.outputFormat}
-                    openFileExplorer={() => setIsModalOpen(true)}
-                  />
-                ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>}
+                {/* Renderização condicional para não pesar a DOM quando fechado */}
+                {(isContextOpen || appMode === 'mr_analysis') && (
+                    pm.files.length > 0 ? (
+                      <Dashboard 
+                        files={pm.files} stats={stats} availableLanguages={availableLanguages}
+                        isGeneratingSummary={pm.isGeneratingSummary} projectSummary={pm.projectSummary}
+                        projectSpec={pm.projectSpec} onGenerateSummary={() => pm.generateSummary(outputContent)} 
+                        outputContent={outputContent} outputFormat={pm.outputFormat}
+                        openFileExplorer={() => setIsModalOpen(true)}
+                      />
+                    ) : <div className="h-full flex items-center justify-center opacity-30 text-[10px] uppercase tracking-widest">Nenhum Projeto Carregado</div>
+                )}
               </div>
             </>
           ) : (
@@ -200,7 +220,7 @@ const App: React.FC = () => {
             />
           )}
         </div>
-      </animated.div>
+      </div>
 
       <FileExplorerModal 
         isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} 
@@ -211,6 +231,7 @@ const App: React.FC = () => {
         availableLanguages={availableLanguages} totalSelected={stats.text} totalTokens={stats.tokens}
         onSelectNewDirectory={pm.handleSelectDirectory}
         toggleFileSelection={path => pm.setFiles(prev => prev.map(f => f.path === path ? { ...f, selected: !f.selected } : f))}
+        onBatchSelection={handleBatchSelection}
         handleBulkAction={action => pm.setFiles(prev => prev.map(f => {
           const visible = filteredFiles.some(ff => ff.path === f.path);
           if (action === 'all') return { ...f, selected: f.type === 'text_file' };
